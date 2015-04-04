@@ -1,0 +1,8 @@
+[package]
+name = "rctree"
+version = "0.0.1"
+authors = ["Simon Sapin <simon.sapin@exyr.org>"]
+
+[lib]
+name = "rctree"
+doctest = false
