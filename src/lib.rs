@@ -6,6 +6,10 @@ use std::ops::{Deref, DerefMut};
 use std::rc::{Rc, Weak};
 
 
+/// A reference to a node holding a value of type `T`. Nodes form a tree.
+///
+/// Internally, this uses reference counting for lifetime tracking
+/// and `std::cell::RefCell` for interior mutability.
 pub struct NodeRef<T>(Rc<RefCell<Node<T>>>);
 
 struct Node<T> {
@@ -29,6 +33,7 @@ fn same_rc<T>(a: &Rc<T>, b: &Rc<T>) -> bool {
 
 
 impl<T> NodeRef<T> {
+    /// Create a new node from its associated data.
     pub fn new(data: T) -> NodeRef<T> {
         NodeRef(Rc::new(RefCell::new(Node {
             parent: None,
@@ -40,43 +45,88 @@ impl<T> NodeRef<T> {
         })))
     }
 
+    /// Return a reference to the parent node, unless this node is the root of the tree.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently mutability borrowed.
     pub fn parent(&self) -> Option<NodeRef<T>> {
         self.0.borrow().parent.as_ref().map(|weak| NodeRef(weak.upgrade().unwrap()))
     }
 
+    /// Return a reference to the first child of this node, unless it has no child.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently mutability borrowed.
     pub fn first_child(&self) -> Option<NodeRef<T>> {
         self.0.borrow().first_child.as_ref().map(|strong| NodeRef(strong.clone()))
     }
 
+    /// Return a reference to the last child of this node, unless it has no child.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently mutability borrowed.
     pub fn last_child(&self) -> Option<NodeRef<T>> {
         self.0.borrow().last_child.as_ref().map(|weak| NodeRef(weak.upgrade().unwrap()))
     }
 
+    /// Return a reference to the previous sibling of this node, unless it is a first child.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently mutability borrowed.
     pub fn previous_sibling(&self) -> Option<NodeRef<T>> {
         self.0.borrow().previous_sibling.as_ref().map(|weak| NodeRef(weak.upgrade().unwrap()))
     }
 
+    /// Return a reference to the previous sibling of this node, unless it is a first child.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently mutability borrowed.
     pub fn next_sibling(&self) -> Option<NodeRef<T>> {
         self.0.borrow().next_sibling.as_ref().map(|strong| NodeRef(strong.clone()))
     }
 
+    /// Return a shared reference to node’s data
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently mutability borrowed.
     pub fn data(&self) -> DataRef<T> {
         DataRef(self.0.borrow())
     }
 
+    /// Return a unique/mutable reference to node’s data
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently borrowed.
     pub fn data_mut(&self) -> DataRefMut<T> {
         DataRefMut(self.0.borrow_mut())
     }
 
+    /// Returns whether two references point to the same node.
     pub fn same_node(&self, other: &NodeRef<T>) -> bool {
         same_rc(&self.0, &other.0)
     }
 
-    // Detach a node from its parent and siblings. Children are not affected.
+    /// Detach a node from its parent and siblings. Children are not affected.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently borrowed.
     pub fn detach(&self) {
         self.0.borrow_mut().detach();
     }
 
+    /// Append a new child to this node, after existing children.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node or the new child is currently borrowed.
     pub fn append(&self, new_child: NodeRef<T>) {
         let mut self_borrow = self.0.borrow_mut();
         let mut new_child_borrow = new_child.0.borrow_mut();
@@ -99,6 +149,11 @@ impl<T> NodeRef<T> {
         }
     }
 
+    /// Prepend a new child to this node, before existing children.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node or the new child is currently borrowed.
     pub fn prepend(&self, new_child: NodeRef<T>) {
         let mut self_borrow = self.0.borrow_mut();
         let mut new_child_borrow = new_child.0.borrow_mut();
@@ -121,6 +176,11 @@ impl<T> NodeRef<T> {
         }
     }
 
+    /// Insert a new sibling after this node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node or the new sibling is currently borrowed.
     pub fn insert_after(&self, new_sibling: NodeRef<T>) {
         let mut self_borrow = self.0.borrow_mut();
         let mut new_sibling_borrow = new_sibling.0.borrow_mut();
@@ -151,6 +211,11 @@ impl<T> NodeRef<T> {
         }
     }
 
+    /// Insert a new sibling before this node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node or the new sibling is currently borrowed.
     pub fn insert_before(&self, new_sibling: NodeRef<T>) {
         let mut self_borrow = self.0.borrow_mut();
         let mut new_sibling_borrow = new_sibling.0.borrow_mut();
@@ -183,7 +248,10 @@ impl<T> NodeRef<T> {
     }
 }
 
+/// Wraps a `std::cell::Ref` for a node’s data.
 pub struct DataRef<'a, T: 'a>(cell::Ref<'a, Node<T>>);
+
+/// Wraps a `std::cell::RefMut` for a node’s data.
 pub struct DataRefMut<'a, T: 'a>(cell::RefMut<'a, Node<T>>);
 
 impl<'a, T> Deref for DataRef<'a, T> {
@@ -202,7 +270,7 @@ impl<'a, T> DerefMut for DataRefMut<'a, T> {
 
 
 impl<T> Node<T> {
-    // Detach a node from its parent and siblings. Children are not affected.
+    /// Detach a node from its parent and siblings. Children are not affected.
     pub fn detach(&mut self) {
         let parent_strong = match self.parent.take() {
             Some(parent_weak) => parent_weak.upgrade().unwrap(),
