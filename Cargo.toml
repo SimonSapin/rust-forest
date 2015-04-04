@@ -1,7 +1,11 @@
 [package]
 name = "rctree"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Simon Sapin <simon.sapin@exyr.org>"]
+license = "MIT"
+description = "A tree of reference-counted nodes, with `RefCell` for mutability"
+repository = "https://github.com/SimonSapin/rust-rctree"
+readme = "README.md"
 
 [lib]
 name = "rctree"
