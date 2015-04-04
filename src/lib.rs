@@ -121,14 +121,14 @@ impl<T> NodeRef<T> {
         }
     }
 
-    pub fn insert_after(&self, new_child: NodeRef<T>) {
+    pub fn insert_after(&self, new_sibling: NodeRef<T>) {
         let mut self_borrow = self.0.borrow_mut();
-        let mut new_child_borrow = new_child.0.borrow_mut();
-        new_child_borrow.detach();
-        new_child_borrow.parent = self_borrow.parent.clone();
-        new_child_borrow.previous_sibling = Some(self.0.downgrade());
+        let mut new_sibling_borrow = new_sibling.0.borrow_mut();
+        new_sibling_borrow.detach();
+        new_sibling_borrow.parent = self_borrow.parent.clone();
+        new_sibling_borrow.previous_sibling = Some(self.0.downgrade());
         // FIXME: Can we avoid this clone?
-        match mem::replace(&mut self_borrow.next_sibling, Some(new_child.0.clone())) {
+        match mem::replace(&mut self_borrow.next_sibling, Some(new_sibling.0.clone())) {
             Some(next_sibling_strong) => {
                 {
                     let mut next_sibling_borrow = next_sibling_strong.borrow_mut();
@@ -136,39 +136,39 @@ impl<T> NodeRef<T> {
                         let weak = next_sibling_borrow.previous_sibling.as_ref().unwrap();
                         same_rc(&weak.upgrade().unwrap(), &self.0)
                     });
-                    next_sibling_borrow.previous_sibling = Some(new_child.0.downgrade());
+                    next_sibling_borrow.previous_sibling = Some(new_sibling.0.downgrade());
                 }
-                new_child_borrow.next_sibling = Some(next_sibling_strong);
+                new_sibling_borrow.next_sibling = Some(next_sibling_strong);
             }
             None => {
                 // FIXME: Is it OK to insert after a root element?
                 if let Some(parent_ref) = self_borrow.parent.as_ref() {
                     let parent_strong = parent_ref.upgrade().unwrap();
                     let mut parent_borrow = parent_strong.borrow_mut();
-                    parent_borrow.last_child = Some(new_child.0.downgrade());
+                    parent_borrow.last_child = Some(new_sibling.0.downgrade());
                 }
             }
         }
     }
 
-    pub fn insert_before(&self, new_child: NodeRef<T>) {
+    pub fn insert_before(&self, new_sibling: NodeRef<T>) {
         let mut self_borrow = self.0.borrow_mut();
-        let mut new_child_borrow = new_child.0.borrow_mut();
-        new_child_borrow.detach();
-        new_child_borrow.parent = self_borrow.parent.clone();
+        let mut new_sibling_borrow = new_sibling.0.borrow_mut();
+        new_sibling_borrow.detach();
+        new_sibling_borrow.parent = self_borrow.parent.clone();
         // FIXME: Can we avoid this clone?
-        new_child_borrow.next_sibling = Some(self.0.clone());
-        match mem::replace(&mut self_borrow.previous_sibling, Some(new_child.0.downgrade())) {
+        new_sibling_borrow.next_sibling = Some(self.0.clone());
+        match mem::replace(&mut self_borrow.previous_sibling, Some(new_sibling.0.downgrade())) {
             Some(previous_sibling_weak) => {
                 let previous_sibling_strong = previous_sibling_weak.upgrade().unwrap();
-                new_child_borrow.previous_sibling = Some(previous_sibling_weak);
+                new_sibling_borrow.previous_sibling = Some(previous_sibling_weak);
                 let mut previous_sibling_borrow = previous_sibling_strong.borrow_mut();
                 debug_assert!({
                     let rc = previous_sibling_borrow.next_sibling.as_ref().unwrap();
                     same_rc(rc, &self.0)
                 });
                 // FIXME: Can we avoid this clone?
-                previous_sibling_borrow.next_sibling = Some(new_child.0.clone());
+                previous_sibling_borrow.next_sibling = Some(new_sibling.0.clone());
             }
             None => {
                 // FIXME: Is it OK to insert before a root element?
@@ -176,7 +176,7 @@ impl<T> NodeRef<T> {
                     let parent_strong = parent_ref.upgrade().unwrap();
                     let mut parent_borrow = parent_strong.borrow_mut();
                     // FIXME: Can we avoid this clone?
-                    parent_borrow.first_child = Some(new_child.0.clone());
+                    parent_borrow.first_child = Some(new_sibling.0.clone());
                 }
             }
         }
