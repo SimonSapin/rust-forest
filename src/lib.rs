@@ -74,9 +74,9 @@ impl<T> NodeRef<T> {
         match mem::replace(&mut self_borrow.last_child, Some(new_child.0.downgrade())) {
             Some(last_child_weak) => {
                 let last_child_strong = last_child_weak.upgrade().unwrap();
+                new_child_borrow.previous_sibling = Some(last_child_weak);
                 let mut last_child_borrow = last_child_strong.borrow_mut();
                 debug_assert!(last_child_borrow.next_sibling.is_none());
-                new_child_borrow.previous_sibling = Some(last_child_weak);
                 // FIXME: Can we avoid this clone?
                 last_child_borrow.next_sibling = Some(new_child.0.clone());
             }
@@ -84,6 +84,28 @@ impl<T> NodeRef<T> {
                 debug_assert!(self_borrow.first_child.is_none());
                 // FIXME: Can we avoid this clone?
                 self_borrow.first_child = Some(new_child.0.clone());
+            }
+        }
+    }
+
+    pub fn prepend(&self, new_child: NodeRef<T>) {
+        let mut self_borrow = self.0.borrow_mut();
+        let mut new_child_borrow = new_child.0.borrow_mut();
+        new_child_borrow.detach();
+        new_child_borrow.parent = Some(self.0.downgrade());
+        // FIXME: Can we avoid this clone?
+        match mem::replace(&mut self_borrow.first_child, Some(new_child.0.clone())) {
+            Some(first_child_strong) => {
+                {
+                    let mut first_child_borrow = first_child_strong.borrow_mut();
+                    debug_assert!(first_child_borrow.previous_sibling.is_none());
+                    first_child_borrow.previous_sibling = Some(new_child.0.downgrade());
+                }
+                new_child_borrow.next_sibling = Some(first_child_strong);
+            }
+            None => {
+                debug_assert!(self_borrow.first_child.is_none());
+                self_borrow.last_child = Some(new_child.0.downgrade());
             }
         }
     }
