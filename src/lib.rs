@@ -117,7 +117,7 @@ impl<T> NodeRef<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the node is currently borrowed.
+    /// Panics if the node or one of its adjoining nodes is currently borrowed.
     pub fn detach(&self) {
         self.0.borrow_mut().detach();
     }
@@ -126,7 +126,7 @@ impl<T> NodeRef<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the node or the new child is currently borrowed.
+    /// Panics if the node, the new child, or one of their adjoining nodes is currently borrowed.
     pub fn append(&self, new_child: NodeRef<T>) {
         let mut self_borrow = self.0.borrow_mut();
         let mut new_child_borrow = new_child.0.borrow_mut();
@@ -153,7 +153,7 @@ impl<T> NodeRef<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the node or the new child is currently borrowed.
+    /// Panics if the node, the new child, or one of their adjoining nodes is currently borrowed.
     pub fn prepend(&self, new_child: NodeRef<T>) {
         let mut self_borrow = self.0.borrow_mut();
         let mut new_child_borrow = new_child.0.borrow_mut();
@@ -180,7 +180,7 @@ impl<T> NodeRef<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the node or the new sibling is currently borrowed.
+    /// Panics if the node, the new sibling, or one of their adjoining nodes is currently borrowed.
     pub fn insert_after(&self, new_sibling: NodeRef<T>) {
         let mut self_borrow = self.0.borrow_mut();
         let mut new_sibling_borrow = new_sibling.0.borrow_mut();
@@ -215,7 +215,7 @@ impl<T> NodeRef<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the node or the new sibling is currently borrowed.
+    /// Panics if the node, the new sibling, or one of their adjoining nodes is currently borrowed.
     pub fn insert_before(&self, new_sibling: NodeRef<T>) {
         let mut self_borrow = self.0.borrow_mut();
         let mut new_sibling_borrow = new_sibling.0.borrow_mut();
@@ -271,7 +271,7 @@ impl<'a, T> DerefMut for DataRefMut<'a, T> {
 
 impl<T> Node<T> {
     /// Detach a node from its parent and siblings. Children are not affected.
-    pub fn detach(&mut self) {
+    fn detach(&mut self) {
         let parent_strong = match self.parent.take() {
             Some(parent_weak) => parent_weak.upgrade().unwrap(),
             None => {
