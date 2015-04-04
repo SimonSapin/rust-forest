@@ -21,6 +21,13 @@ type Link<T> = Option<Rc<RefCell<Node<T>>>>;
 type WeakLink<T> = Option<Weak<RefCell<Node<T>>>>;
 
 
+fn same_rc<T>(a: &Rc<T>, b: &Rc<T>) -> bool {
+    let a: *const T = &**a;
+    let b: *const T = &**b;
+    a == b
+}
+
+
 impl<T> NodeRef<T> {
     pub fn new(data: T) -> NodeRef<T> {
         NodeRef(Rc::new(RefCell::new(Node {
@@ -59,6 +66,10 @@ impl<T> NodeRef<T> {
 
     pub fn data_mut(&self) -> DataRefMut<T> {
         DataRefMut(self.0.borrow_mut())
+    }
+
+    pub fn same_node(&self, other: &NodeRef<T>) -> bool {
+        same_rc(&self.0, &other.0)
     }
 
     // Detach a node from its parent and siblings. Children are not affected.
@@ -121,6 +132,10 @@ impl<T> NodeRef<T> {
             Some(next_sibling_strong) => {
                 {
                     let mut next_sibling_borrow = next_sibling_strong.borrow_mut();
+                    debug_assert!({
+                        let weak = next_sibling_borrow.previous_sibling.as_ref().unwrap();
+                        same_rc(&weak.upgrade().unwrap(), &self.0)
+                    });
                     next_sibling_borrow.previous_sibling = Some(new_child.0.downgrade());
                 }
                 new_child_borrow.next_sibling = Some(next_sibling_strong);
@@ -148,6 +163,10 @@ impl<T> NodeRef<T> {
                 let previous_sibling_strong = previous_sibling_weak.upgrade().unwrap();
                 new_child_borrow.previous_sibling = Some(previous_sibling_weak);
                 let mut previous_sibling_borrow = previous_sibling_strong.borrow_mut();
+                debug_assert!({
+                    let rc = previous_sibling_borrow.next_sibling.as_ref().unwrap();
+                    same_rc(rc, &self.0)
+                });
                 // FIXME: Can we avoid this clone?
                 previous_sibling_borrow.next_sibling = Some(new_child.0.clone());
             }
