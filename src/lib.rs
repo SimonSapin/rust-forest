@@ -45,6 +45,15 @@ impl<T: fmt::Debug> fmt::Debug for NodeRef<T> {
     }
 }
 
+macro_rules! try_opt {
+    ($expr: expr) => {
+        match $expr {
+            Some(value) => value,
+            None => return None
+        }
+    }
+}
+
 
 impl<T> NodeRef<T> {
     /// Create a new node from its associated data.
@@ -65,7 +74,7 @@ impl<T> NodeRef<T> {
     ///
     /// Panics if the node is currently mutability borrowed.
     pub fn parent(&self) -> Option<NodeRef<T>> {
-        self.0.borrow().parent.as_ref().map(|weak| NodeRef(weak.upgrade().unwrap()))
+        Some(NodeRef(try_opt!(try_opt!(self.0.borrow().parent.as_ref()).upgrade())))
     }
 
     /// Return a reference to the first child of this node, unless it has no child.
@@ -74,7 +83,7 @@ impl<T> NodeRef<T> {
     ///
     /// Panics if the node is currently mutability borrowed.
     pub fn first_child(&self) -> Option<NodeRef<T>> {
-        self.0.borrow().first_child.as_ref().map(|strong| NodeRef(strong.clone()))
+        Some(NodeRef(try_opt!(self.0.borrow().first_child.as_ref()).clone()))
     }
 
     /// Return a reference to the last child of this node, unless it has no child.
@@ -83,7 +92,7 @@ impl<T> NodeRef<T> {
     ///
     /// Panics if the node is currently mutability borrowed.
     pub fn last_child(&self) -> Option<NodeRef<T>> {
-        self.0.borrow().last_child.as_ref().map(|weak| NodeRef(weak.upgrade().unwrap()))
+        Some(NodeRef(try_opt!(try_opt!(self.0.borrow().last_child.as_ref()).upgrade())))
     }
 
     /// Return a reference to the previous sibling of this node, unless it is a first child.
@@ -92,7 +101,7 @@ impl<T> NodeRef<T> {
     ///
     /// Panics if the node is currently mutability borrowed.
     pub fn previous_sibling(&self) -> Option<NodeRef<T>> {
-        self.0.borrow().previous_sibling.as_ref().map(|weak| NodeRef(weak.upgrade().unwrap()))
+        Some(NodeRef(try_opt!(try_opt!(self.0.borrow().previous_sibling.as_ref()).upgrade())))
     }
 
     /// Return a reference to the previous sibling of this node, unless it is a first child.
@@ -101,7 +110,7 @@ impl<T> NodeRef<T> {
     ///
     /// Panics if the node is currently mutability borrowed.
     pub fn next_sibling(&self) -> Option<NodeRef<T>> {
-        self.0.borrow().next_sibling.as_ref().map(|strong| NodeRef(strong.clone()))
+        Some(NodeRef(try_opt!(self.0.borrow().next_sibling.as_ref()).clone()))
     }
 
     /// Return a shared reference to this node’s data
@@ -209,21 +218,22 @@ impl<T> NodeRef<T> {
         let mut new_child_borrow = new_child.0.borrow_mut();
         new_child_borrow.detach();
         new_child_borrow.parent = Some(self.0.downgrade());
-        match mem::replace(&mut self_borrow.last_child, Some(new_child.0.downgrade())) {
-            Some(last_child_weak) => {
-                let last_child_strong = last_child_weak.upgrade().unwrap();
+        if let Some(last_child_weak) = mem::replace(&mut self_borrow.last_child,
+                                                    Some(new_child.0.downgrade())) {
+            if let Some(last_child_strong) = last_child_weak.upgrade() {
                 new_child_borrow.previous_sibling = Some(last_child_weak);
                 let mut last_child_borrow = last_child_strong.borrow_mut();
                 debug_assert!(last_child_borrow.next_sibling.is_none());
                 // FIXME: Can we avoid this clone?
                 last_child_borrow.next_sibling = Some(new_child.0.clone());
-            }
-            None => {
-                debug_assert!(self_borrow.first_child.is_none());
-                // FIXME: Can we avoid this clone?
-                self_borrow.first_child = Some(new_child.0.clone());
+                return
             }
         }
+
+        // No last child
+        debug_assert!(self_borrow.first_child.is_none());
+        // FIXME: Can we avoid this clone?
+        self_borrow.first_child = Some(new_child.0.clone());
     }
 
     /// Prepend a new child to this node, before existing children.
@@ -279,9 +289,10 @@ impl<T> NodeRef<T> {
             }
             None => {
                 if let Some(parent_ref) = self_borrow.parent.as_ref() {
-                    let parent_strong = parent_ref.upgrade().unwrap();
-                    let mut parent_borrow = parent_strong.borrow_mut();
-                    parent_borrow.last_child = Some(new_sibling.0.downgrade());
+                    if let Some(parent_strong) = parent_ref.upgrade() {
+                        let mut parent_borrow = parent_strong.borrow_mut();
+                        parent_borrow.last_child = Some(new_sibling.0.downgrade());
+                    }
                 }
             }
         }
@@ -299,9 +310,9 @@ impl<T> NodeRef<T> {
         new_sibling_borrow.parent = self_borrow.parent.clone();
         // FIXME: Can we avoid this clone?
         new_sibling_borrow.next_sibling = Some(self.0.clone());
-        match mem::replace(&mut self_borrow.previous_sibling, Some(new_sibling.0.downgrade())) {
-            Some(previous_sibling_weak) => {
-                let previous_sibling_strong = previous_sibling_weak.upgrade().unwrap();
+        if let Some(previous_sibling_weak) = mem::replace(&mut self_borrow.previous_sibling,
+                                                          Some(new_sibling.0.downgrade())) {
+            if let Some(previous_sibling_strong) = previous_sibling_weak.upgrade() {
                 new_sibling_borrow.previous_sibling = Some(previous_sibling_weak);
                 let mut previous_sibling_borrow = previous_sibling_strong.borrow_mut();
                 debug_assert!({
@@ -310,14 +321,16 @@ impl<T> NodeRef<T> {
                 });
                 // FIXME: Can we avoid this clone?
                 previous_sibling_borrow.next_sibling = Some(new_sibling.0.clone());
+                return
             }
-            None => {
-                if let Some(parent_ref) = self_borrow.parent.as_ref() {
-                    let parent_strong = parent_ref.upgrade().unwrap();
-                    let mut parent_borrow = parent_strong.borrow_mut();
-                    // FIXME: Can we avoid this clone?
-                    parent_borrow.first_child = Some(new_sibling.0.clone());
-                }
+        }
+
+        // No previous sibling.
+        if let Some(parent_ref) = self_borrow.parent.as_ref() {
+            if let Some(parent_strong) = parent_ref.upgrade() {
+                let mut parent_borrow = parent_strong.borrow_mut();
+                // FIXME: Can we avoid this clone?
+                parent_borrow.first_child = Some(new_sibling.0.clone());
             }
         }
     }
@@ -356,20 +369,23 @@ impl<T> Node<T> {
             // FIXME: Can we avoid this clone?
             next_sibling_borrow.previous_sibling = previous_sibling_weak.clone();
         } else if let Some(parent_ref) = parent_weak.as_ref() {
-            let parent_strong = parent_ref.upgrade().unwrap();
-            let mut parent_borrow = parent_strong.borrow_mut();
-            // FIXME: Can we avoid this clone?
-            parent_borrow.last_child = previous_sibling_weak.clone();
+            if let Some(parent_strong) = parent_ref.upgrade() {
+                let mut parent_borrow = parent_strong.borrow_mut();
+                // FIXME: Can we avoid this clone?
+                parent_borrow.last_child = previous_sibling_weak.clone();
+            }
         }
 
         if let Some(previous_sibling_ref) = previous_sibling_weak.as_ref() {
-            let previous_sibling_strong = previous_sibling_ref.upgrade().unwrap();
-            let mut previous_sibling_borrow = previous_sibling_strong.borrow_mut();
-            previous_sibling_borrow.next_sibling = next_sibling_strong;
+            if let Some(previous_sibling_strong) = previous_sibling_ref.upgrade() {
+                let mut previous_sibling_borrow = previous_sibling_strong.borrow_mut();
+                previous_sibling_borrow.next_sibling = next_sibling_strong;
+            }
         } else if let Some(parent_ref) = parent_weak.as_ref() {
-            let parent_strong = parent_ref.upgrade().unwrap();
-            let mut parent_borrow = parent_strong.borrow_mut();
-            parent_borrow.first_child = next_sibling_strong;
+            if let Some(parent_strong) = parent_ref.upgrade() {
+                let mut parent_borrow = parent_strong.borrow_mut();
+                parent_borrow.first_child = next_sibling_strong;
+            }
         }
     }
 }
