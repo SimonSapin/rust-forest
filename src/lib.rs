@@ -32,6 +32,13 @@ fn same_rc<T>(a: &Rc<T>, b: &Rc<T>) -> bool {
 }
 
 
+impl<T> Clone for NodeRef<T> {
+    fn clone(&self) -> NodeRef<T> {
+        NodeRef(self.0.clone())
+    }
+}
+
+
 impl<T> NodeRef<T> {
     /// Create a new node from its associated data.
     pub fn new(data: T) -> NodeRef<T> {
@@ -90,7 +97,7 @@ impl<T> NodeRef<T> {
         self.0.borrow().next_sibling.as_ref().map(|strong| NodeRef(strong.clone()))
     }
 
-    /// Return a shared reference to node’s data
+    /// Return a shared reference to this node’s data
     ///
     /// # Panics
     ///
@@ -99,7 +106,7 @@ impl<T> NodeRef<T> {
         DataRef(self.0.borrow())
     }
 
-    /// Return a unique/mutable reference to node’s data
+    /// Return a unique/mutable reference to this node’s data
     ///
     /// # Panics
     ///
@@ -111,6 +118,55 @@ impl<T> NodeRef<T> {
     /// Returns whether two references point to the same node.
     pub fn same_node(&self, other: &NodeRef<T>) -> bool {
         same_rc(&self.0, &other.0)
+    }
+
+    /// Return an iterator of references to this node and its ancestors.
+    ///
+    /// Call `.next().unwrap()` once on the iterator to skip the node itself.
+    pub fn ancestors(&self) -> Ancestors<T> {
+        Ancestors(Some(self.clone()))
+    }
+
+    /// Return an iterator of references to this node and the siblings before it.
+    ///
+    /// Call `.next().unwrap()` once on the iterator to skip the node itself.
+    pub fn preceding_siblings(&self) -> PrecedingSiblings<T> {
+        PrecedingSiblings(Some(self.clone()))
+    }
+
+    /// Return an iterator of references to this node and the siblings after it.
+    ///
+    /// Call `.next().unwrap()` once on the iterator to skip the node itself.
+    pub fn following_siblings(&self) -> FollowingSiblings<T> {
+        FollowingSiblings(Some(self.clone()))
+    }
+
+    /// Return an iterator of references to this node’s children.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently mutability borrowed.
+    pub fn children(&self) -> Children<T> {
+        Children(self.first_child())
+    }
+
+    /// Return an iterator of references to this node’s children, in reverse order.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently mutability borrowed.
+    pub fn reverse_children(&self) -> ReverseChildren<T> {
+        ReverseChildren(self.last_child())
+    }
+
+    /// Return an iterator of references to this node and its descendants, in tree order.
+    ///
+    /// Call `.next().unwrap()` once on the iterator to skip the node itself.
+    pub fn descendants(&self) -> Descendants<T> {
+        Descendants {
+            root: self.clone(),
+            next: Some(self.clone()),
+        }
     }
 
     /// Detach a node from its parent and siblings. Children are not affected.
@@ -301,5 +357,112 @@ impl<T> Node<T> {
         } else {
             parent_borrow.first_child = next_sibling_strong;
         }
+    }
+}
+
+
+macro_rules! impl_node_iterator {
+    ($name: ident, $next: expr) => {
+        impl<T> Iterator for $name<T> {
+            type Item = NodeRef<T>;
+
+            /// # Panics
+            ///
+            /// Panics if the node about to be yielded is currently mutability borrowed.
+            fn next(&mut self) -> Option<NodeRef<T>> {
+                match self.0.take() {
+                    Some(node) => {
+                        self.0 = $next(&node);
+                        Some(node)
+                    }
+                    None => None
+                }
+            }
+        }
+    }
+}
+
+/// An iterator of references to the ancestors a given node.
+pub struct Ancestors<T>(Option<NodeRef<T>>);
+impl_node_iterator!(Ancestors, |node: &NodeRef<T>| node.parent());
+
+/// An iterator of references to the siblings before a given node.
+pub struct PrecedingSiblings<T>(Option<NodeRef<T>>);
+impl_node_iterator!(PrecedingSiblings, |node: &NodeRef<T>| node.previous_sibling());
+
+/// An iterator of references to the siblings after a given node.
+pub struct FollowingSiblings<T>(Option<NodeRef<T>>);
+impl_node_iterator!(FollowingSiblings, |node: &NodeRef<T>| node.next_sibling());
+
+/// An iterator of references to the children of a given node.
+pub struct Children<T>(Option<NodeRef<T>>);
+impl_node_iterator!(Children, |node: &NodeRef<T>| node.next_sibling());
+
+/// An iterator of references to the children of a given node, in reverse order.
+pub struct ReverseChildren<T>(Option<NodeRef<T>>);
+impl_node_iterator!(ReverseChildren, |node: &NodeRef<T>| node.previous_sibling());
+
+
+/// An iterator of references to a given node and its descandants, in tree order.
+pub struct Descendants<T> {
+    root: NodeRef<T>,
+    next: Option<NodeRef<T>>,
+}
+
+impl<T> Iterator for Descendants<T> {
+    type Item = NodeRef<T>;
+
+    /// # Panics
+    ///
+    /// Panics if the node about to be yielded is currently mutability borrowed.
+    fn next(&mut self) -> Option<NodeRef<T>> {
+        match self.next.take() {
+            Some(node) => {
+                self.next = descandants_next(&node, &self.root);
+                Some(node)
+            }
+            None => None
+        }
+    }
+}
+
+fn descandants_next<T>(node: &NodeRef<T>, root: &NodeRef<T>) -> Option<NodeRef<T>> {
+    let mut parent;
+    {
+        let node_borrow = node.0.borrow();
+
+        if let Some(first_child) = node_borrow.first_child.as_ref() {
+            return Some(NodeRef(first_child.clone()))
+
+        } else if let Some(next_sibling) = node_borrow.next_sibling.as_ref() {
+            return Some(NodeRef(next_sibling.clone()));
+
+        } else if let Some(parent_weak) = node_borrow.parent.as_ref() {
+            parent = parent_weak.upgrade().unwrap();
+
+        } else {
+            return None
+        }
+    }
+
+    loop {
+        if same_rc(&parent, &root.0) {
+            return None
+        }
+        let next_parent;
+        {
+            let parent_borrow = parent.borrow();
+
+            if let Some(next_sibling) = parent_borrow.next_sibling.as_ref() {
+                return Some(NodeRef(next_sibling.clone()));
+
+            } else if let Some(parent_weak) = parent_borrow.parent.as_ref() {
+                next_parent = parent_weak.upgrade().unwrap();
+
+            } else {
+                return None
+            }
+        }
+        parent = next_parent;
     }
 }
