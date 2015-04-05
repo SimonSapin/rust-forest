@@ -43,7 +43,7 @@ impl<T> Clone for NodeRef<T> {
 
 impl<T: fmt::Debug> fmt::Debug for NodeRef<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(&*self.data(), f)
+        fmt::Debug::fmt(&*self.borrow(), f)
     }
 }
 
@@ -120,7 +120,7 @@ impl<T> NodeRef<T> {
     /// # Panics
     ///
     /// Panics if the node is currently mutability borrowed.
-    pub fn data(&self) -> DataRef<T> {
+    pub fn borrow(&self) -> DataRef<T> {
         DataRef { _ref: self.0.borrow() }
     }
 
@@ -129,7 +129,7 @@ impl<T> NodeRef<T> {
     /// # Panics
     ///
     /// Panics if the node is currently borrowed.
-    pub fn data_mut(&self) -> DataRefMut<T> {
+    pub fn borrow_mut(&self) -> DataRefMut<T> {
         DataRefMut { _ref: self.0.borrow_mut() }
     }
 
@@ -615,8 +615,8 @@ fn it_works() {
         assert_eq!(drop_counter.get(), 1);
 
         assert_eq!(b.descendants().map(|node| {
-            let data = node.data();
-            data.0
+            let borrow = node.borrow();
+            borrow.0
         }).collect::<Vec<_>>(), [
             5, 6, 7, 1, 4, 2, 3, 9, 10
         ]);
