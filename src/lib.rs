@@ -161,11 +161,20 @@ impl<T> NodeRef<T> {
 
     /// Return an iterator of references to this node and its descendants, in tree order.
     ///
+    /// Parent nodes appear before the descendants.
     /// Call `.next().unwrap()` once on the iterator to skip the node itself.
     pub fn descendants(&self) -> Descendants<T> {
         Descendants {
             root: self.clone(),
             next: Some(self.clone()),
+        }
+    }
+
+    /// Return an iterator of references to this node and its descendants, in tree order.
+    pub fn traverse(&self) -> Traverse<T> {
+        Traverse {
+            root: self.clone(),
+            next: Some(Item::Open(self.clone())),
         }
     }
 
@@ -464,5 +473,66 @@ fn descandants_next<T>(node: &NodeRef<T>, root: &NodeRef<T>) -> Option<NodeRef<T
             }
         }
         parent = next_parent;
+    }
+}
+
+
+/// An iterator of references to a given node and its descandants, in tree order.
+pub struct Traverse<T> {
+    root: NodeRef<T>,
+    next: Option<Item<T>>,
+}
+
+pub enum Item<T> {
+    /// Indicates that start of a node that has children.
+    /// Yielded by `Traverse::next` before the node’s descandants.
+    /// In HTML or XML, this corresponds to an opening tag like `<div>`
+    Open(NodeRef<T>),
+
+    /// Indicates that end of a node that has children.
+    /// Yielded by `Traverse::next` after the node’s descandants.
+    /// In HTML or XML, this corresponds to a closing tag like `</div>`
+    Close(NodeRef<T>),
+}
+
+impl<T> Iterator for Traverse<T> {
+    type Item = Item<T>;
+
+    /// # Panics
+    ///
+    /// Panics if the node about to be yielded is currently mutability borrowed.
+    fn next(&mut self) -> Option<Item<T>> {
+        match self.next.take() {
+            Some(item) => {
+                self.next = match item {
+                    Item::Open(ref node) => {
+                        match node.first_child() {
+                            Some(first_child) => Some(Item::Open(first_child)),
+                            None => Some(Item::Close(node.clone()))
+                        }
+                    }
+                    Item::Close(ref node) => {
+                        if node.same_node(&self.root) {
+                            None
+                        } else {
+                            match node.next_sibling() {
+                                Some(next_sibling) => Some(Item::Open(next_sibling)),
+                                None => match node.parent() {
+                                    Some(parent) => Some(Item::Close(parent)),
+
+                                    // `node.parent()` here can only be `None`
+                                    // if the tree has been modified during iteration,
+                                    // but silently stoping iteration
+                                    // seems a more sensible behavior than panicking.
+                                    None => None
+                                }
+                            }
+                        }
+                    }
+                };
+                Some(item)
+            }
+            None => None
+        }
     }
 }
