@@ -1,6 +1,7 @@
 #![feature(alloc)]
 
 use std::cell::{self, RefCell};
+use std::fmt;
 use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::rc::{Rc, Weak};
@@ -35,6 +36,12 @@ fn same_rc<T>(a: &Rc<T>, b: &Rc<T>) -> bool {
 impl<T> Clone for NodeRef<T> {
     fn clone(&self) -> NodeRef<T> {
         NodeRef(self.0.clone())
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for NodeRef<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&*self.data(), f)
     }
 }
 
@@ -438,6 +445,7 @@ impl<T> Iterator for Descendants<T> {
 }
 
 
+#[derive(Debug, Clone)]
 pub enum NodeEdge<T> {
     /// Indicates that start of a node that has children.
     /// Yielded by `Traverse::next` before the node’s descandants.
@@ -449,6 +457,7 @@ pub enum NodeEdge<T> {
     /// In HTML or XML, this corresponds to a closing tag like `</div>`
     End(NodeRef<T>),
 }
+
 
 /// An iterator of references to a given node and its descandants, in tree order.
 pub struct Traverse<T> {
