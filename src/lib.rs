@@ -164,17 +164,14 @@ impl<T> NodeRef<T> {
     /// Parent nodes appear before the descendants.
     /// Call `.next().unwrap()` once on the iterator to skip the node itself.
     pub fn descendants(&self) -> Descendants<T> {
-        Descendants {
-            root: self.clone(),
-            next: Some(self.clone()),
-        }
+        Descendants(self.traverse())
     }
 
     /// Return an iterator of references to this node and its descendants, in tree order.
     pub fn traverse(&self) -> Traverse<T> {
         Traverse {
             root: self.clone(),
-            next: Some(Item::Open(self.clone())),
+            next: Some(NodeEdge::Start(self.clone())),
         }
     }
 
@@ -413,10 +410,7 @@ impl_node_iterator!(ReverseChildren, |node: &NodeRef<T>| node.previous_sibling()
 
 
 /// An iterator of references to a given node and its descandants, in tree order.
-pub struct Descendants<T> {
-    root: NodeRef<T>,
-    next: Option<NodeRef<T>>,
-}
+pub struct Descendants<T>(Traverse<T>);
 
 impl<T> Iterator for Descendants<T> {
     type Item = NodeRef<T>;
@@ -425,54 +419,13 @@ impl<T> Iterator for Descendants<T> {
     ///
     /// Panics if the node about to be yielded is currently mutability borrowed.
     fn next(&mut self) -> Option<NodeRef<T>> {
-        match self.next.take() {
-            Some(node) => {
-                self.next = descandants_next(&node, &self.root);
-                Some(node)
-            }
-            None => None
-        }
-    }
-}
-
-fn descandants_next<T>(node: &NodeRef<T>, root: &NodeRef<T>) -> Option<NodeRef<T>> {
-    let mut parent;
-    {
-        let node_borrow = node.0.borrow();
-
-        if let Some(first_child) = node_borrow.first_child.as_ref() {
-            return Some(NodeRef(first_child.clone()))
-
-        } else if let Some(next_sibling) = node_borrow.next_sibling.as_ref() {
-            return Some(NodeRef(next_sibling.clone()));
-
-        } else if let Some(parent_weak) = node_borrow.parent.as_ref() {
-            parent = parent_weak.upgrade().unwrap();
-
-        } else {
-            return None
-        }
-    }
-
-    loop {
-        if same_rc(&parent, &root.0) {
-            return None
-        }
-        let next_parent;
-        {
-            let parent_borrow = parent.borrow();
-
-            if let Some(next_sibling) = parent_borrow.next_sibling.as_ref() {
-                return Some(NodeRef(next_sibling.clone()));
-
-            } else if let Some(parent_weak) = parent_borrow.parent.as_ref() {
-                next_parent = parent_weak.upgrade().unwrap();
-
-            } else {
-                return None
+        loop {
+            match self.0.next() {
+                Some(NodeEdge::Start(node)) => return Some(node),
+                Some(NodeEdge::End(_)) => {}
+                None => return None
             }
         }
-        parent = next_parent;
     }
 }
 
@@ -480,45 +433,45 @@ fn descandants_next<T>(node: &NodeRef<T>, root: &NodeRef<T>) -> Option<NodeRef<T
 /// An iterator of references to a given node and its descandants, in tree order.
 pub struct Traverse<T> {
     root: NodeRef<T>,
-    next: Option<Item<T>>,
+    next: Option<NodeEdge<T>>,
 }
 
-pub enum Item<T> {
+pub enum NodeEdge<T> {
     /// Indicates that start of a node that has children.
     /// Yielded by `Traverse::next` before the node’s descandants.
     /// In HTML or XML, this corresponds to an opening tag like `<div>`
-    Open(NodeRef<T>),
+    Start(NodeRef<T>),
 
     /// Indicates that end of a node that has children.
     /// Yielded by `Traverse::next` after the node’s descandants.
     /// In HTML or XML, this corresponds to a closing tag like `</div>`
-    Close(NodeRef<T>),
+    End(NodeRef<T>),
 }
 
 impl<T> Iterator for Traverse<T> {
-    type Item = Item<T>;
+    type Item = NodeEdge<T>;
 
     /// # Panics
     ///
     /// Panics if the node about to be yielded is currently mutability borrowed.
-    fn next(&mut self) -> Option<Item<T>> {
+    fn next(&mut self) -> Option<NodeEdge<T>> {
         match self.next.take() {
             Some(item) => {
                 self.next = match item {
-                    Item::Open(ref node) => {
+                    NodeEdge::Start(ref node) => {
                         match node.first_child() {
-                            Some(first_child) => Some(Item::Open(first_child)),
-                            None => Some(Item::Close(node.clone()))
+                            Some(first_child) => Some(NodeEdge::Start(first_child)),
+                            None => Some(NodeEdge::End(node.clone()))
                         }
                     }
-                    Item::Close(ref node) => {
+                    NodeEdge::End(ref node) => {
                         if node.same_node(&self.root) {
                             None
                         } else {
                             match node.next_sibling() {
-                                Some(next_sibling) => Some(Item::Open(next_sibling)),
+                                Some(next_sibling) => Some(NodeEdge::Start(next_sibling)),
                                 None => match node.parent() {
-                                    Some(parent) => Some(Item::Close(parent)),
+                                    Some(parent) => Some(NodeEdge::End(parent)),
 
                                     // `node.parent()` here can only be `None`
                                     // if the tree has been modified during iteration,
