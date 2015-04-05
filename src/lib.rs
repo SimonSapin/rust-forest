@@ -10,6 +10,8 @@ use std::rc::{Rc, Weak};
 ///
 /// Internally, this uses reference counting for lifetime tracking
 /// and `std::cell::RefCell` for interior mutability.
+///
+/// **Note:** Cloning a `NodeRef` only increments a reference count. It does not copy the data.
 pub struct NodeRef<T>(Rc<RefCell<Node<T>>>);
 
 struct Node<T> {
@@ -32,6 +34,7 @@ fn same_rc<T>(a: &Rc<T>, b: &Rc<T>) -> bool {
 }
 
 
+/// Cloning a `NodeRef` only increments a reference count. It does not copy the data.
 impl<T> Clone for NodeRef<T> {
     fn clone(&self) -> NodeRef<T> {
         NodeRef(self.0.clone())
@@ -118,7 +121,7 @@ impl<T> NodeRef<T> {
     ///
     /// Panics if the node is currently mutability borrowed.
     pub fn data(&self) -> DataRef<T> {
-        DataRef(self.0.borrow())
+        DataRef { _ref: self.0.borrow() }
     }
 
     /// Return a unique/mutable reference to this node’s data
@@ -127,7 +130,7 @@ impl<T> NodeRef<T> {
     ///
     /// Panics if the node is currently borrowed.
     pub fn data_mut(&self) -> DataRefMut<T> {
-        DataRefMut(self.0.borrow_mut())
+        DataRefMut { _ref: self.0.borrow_mut() }
     }
 
     /// Returns whether two references point to the same node.
@@ -347,23 +350,27 @@ impl<T> NodeRef<T> {
 }
 
 /// Wraps a `std::cell::Ref` for a node’s data.
-pub struct DataRef<'a, T: 'a>(cell::Ref<'a, Node<T>>);
+pub struct DataRef<'a, T: 'a> {
+    _ref: cell::Ref<'a, Node<T>>
+}
 
 /// Wraps a `std::cell::RefMut` for a node’s data.
-pub struct DataRefMut<'a, T: 'a>(cell::RefMut<'a, Node<T>>);
+pub struct DataRefMut<'a, T: 'a> {
+    _ref: cell::RefMut<'a, Node<T>>
+}
 
 impl<'a, T> Deref for DataRef<'a, T> {
     type Target = T;
-    fn deref(&self) -> &T { &self.0.data }
+    fn deref(&self) -> &T { &self._ref.data }
 }
 
 impl<'a, T> Deref for DataRefMut<'a, T> {
     type Target = T;
-    fn deref(&self) -> &T { &self.0.data }
+    fn deref(&self) -> &T { &self._ref.data }
 }
 
 impl<'a, T> DerefMut for DataRefMut<'a, T> {
-    fn deref_mut(&mut self) -> &mut T { &mut self.0.data }
+    fn deref_mut(&mut self) -> &mut T { &mut self._ref.data }
 }
 
 
@@ -441,7 +448,7 @@ pub struct ReverseChildren<T>(Option<NodeRef<T>>);
 impl_node_iterator!(ReverseChildren, |node: &NodeRef<T>| node.previous_sibling());
 
 
-/// An iterator of references to a given node and its descandants, in tree order.
+/// An iterator of references to a given node and its descendants, in tree order.
 pub struct Descendants<T>(Traverse<T>);
 
 impl<T> Iterator for Descendants<T> {
@@ -465,18 +472,18 @@ impl<T> Iterator for Descendants<T> {
 #[derive(Debug, Clone)]
 pub enum NodeEdge<T> {
     /// Indicates that start of a node that has children.
-    /// Yielded by `Traverse::next` before the node’s descandants.
+    /// Yielded by `Traverse::next` before the node’s descendants.
     /// In HTML or XML, this corresponds to an opening tag like `<div>`
     Start(NodeRef<T>),
 
     /// Indicates that end of a node that has children.
-    /// Yielded by `Traverse::next` after the node’s descandants.
+    /// Yielded by `Traverse::next` after the node’s descendants.
     /// In HTML or XML, this corresponds to a closing tag like `</div>`
     End(NodeRef<T>),
 }
 
 
-/// An iterator of references to a given node and its descandants, in tree order.
+/// An iterator of references to a given node and its descendants, in tree order.
 pub struct Traverse<T> {
     root: NodeRef<T>,
     next: Option<NodeEdge<T>>,
@@ -524,7 +531,7 @@ impl<T> Iterator for Traverse<T> {
     }
 }
 
-/// An iterator of references to a given node and its descandants, in reverse tree order.
+/// An iterator of references to a given node and its descendants, in reverse tree order.
 pub struct ReverseTraverse<T> {
     root: NodeRef<T>,
     next: Option<NodeEdge<T>>,
@@ -570,4 +577,50 @@ impl<T> Iterator for ReverseTraverse<T> {
             None => None
         }
     }
+}
+
+
+#[test]
+fn it_works() {
+    struct DropTracker<'a>(&'a cell::Cell<u32>);
+    impl<'a> Drop for DropTracker<'a> {
+        fn drop(&mut self) {
+            self.0.set(self.0.get() + 1);
+        }
+    }
+
+    let mut new_counter = 0;
+    let drop_counter = cell::Cell::new(0);
+    let mut new = || {
+        new_counter += 1;
+        NodeRef::new((new_counter, DropTracker(&drop_counter)))
+    };
+
+    {
+        let a = new();  // 1
+        a.append(new());  // 2
+        a.append(new());  // 3
+        a.prepend(new());  // 4
+        let b = new();  // 5
+        b.append(a.clone());
+        a.insert_before(new());  // 6
+        a.insert_before(new());  // 7
+        a.insert_after(new());  // 8
+        a.insert_after(new());  // 9
+        let c = new();  // 10
+        b.append(c.clone());
+
+        assert_eq!(drop_counter.get(), 0);
+        c.previous_sibling().unwrap().detach();
+        assert_eq!(drop_counter.get(), 1);
+
+        assert_eq!(b.descendants().map(|node| {
+            let data = node.data();
+            data.0
+        }).collect::<Vec<_>>(), [
+            5, 6, 7, 1, 4, 2, 3, 9, 10
+        ]);
+    }
+
+    assert_eq!(drop_counter.get(), 10);
 }
