@@ -278,7 +278,6 @@ impl<T> NodeRef<T> {
                 new_sibling_borrow.next_sibling = Some(next_sibling_strong);
             }
             None => {
-                // FIXME: Is it OK to insert after a root element?
                 if let Some(parent_ref) = self_borrow.parent.as_ref() {
                     let parent_strong = parent_ref.upgrade().unwrap();
                     let mut parent_borrow = parent_strong.borrow_mut();
@@ -313,7 +312,6 @@ impl<T> NodeRef<T> {
                 previous_sibling_borrow.next_sibling = Some(new_sibling.0.clone());
             }
             None => {
-                // FIXME: Is it OK to insert before a root element?
                 if let Some(parent_ref) = self_borrow.parent.as_ref() {
                     let parent_strong = parent_ref.upgrade().unwrap();
                     let mut parent_borrow = parent_strong.borrow_mut();
@@ -349,16 +347,7 @@ impl<'a, T> DerefMut for DataRefMut<'a, T> {
 impl<T> Node<T> {
     /// Detach a node from its parent and siblings. Children are not affected.
     fn detach(&mut self) {
-        let parent_strong = match self.parent.take() {
-            Some(parent_weak) => parent_weak.upgrade().unwrap(),
-            None => {
-                debug_assert!(self.previous_sibling.is_none());
-                debug_assert!(self.next_sibling.is_none());
-                return
-            }
-        };
-        let mut parent_borrow = parent_strong.borrow_mut();
-
+        let parent_weak = self.parent.take();
         let previous_sibling_weak = self.previous_sibling.take();
         let next_sibling_strong = self.next_sibling.take();
 
@@ -366,7 +355,9 @@ impl<T> Node<T> {
             let mut next_sibling_borrow = next_sibling_ref.borrow_mut();
             // FIXME: Can we avoid this clone?
             next_sibling_borrow.previous_sibling = previous_sibling_weak.clone();
-        } else {
+        } else if let Some(parent_ref) = parent_weak.as_ref() {
+            let parent_strong = parent_ref.upgrade().unwrap();
+            let mut parent_borrow = parent_strong.borrow_mut();
             // FIXME: Can we avoid this clone?
             parent_borrow.last_child = previous_sibling_weak.clone();
         }
@@ -375,7 +366,9 @@ impl<T> Node<T> {
             let previous_sibling_strong = previous_sibling_ref.upgrade().unwrap();
             let mut previous_sibling_borrow = previous_sibling_strong.borrow_mut();
             previous_sibling_borrow.next_sibling = next_sibling_strong;
-        } else {
+        } else if let Some(parent_ref) = parent_weak.as_ref() {
+            let parent_strong = parent_ref.upgrade().unwrap();
+            let mut parent_borrow = parent_strong.borrow_mut();
             parent_borrow.first_child = next_sibling_strong;
         }
     }
