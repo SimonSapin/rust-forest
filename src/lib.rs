@@ -175,6 +175,14 @@ impl<T> NodeRef<T> {
         }
     }
 
+    /// Return an iterator of references to this node and its descendants, in tree order.
+    pub fn reverse_traverse(&self) -> ReverseTraverse<T> {
+        ReverseTraverse {
+            root: self.clone(),
+            next: Some(NodeEdge::End(self.clone())),
+        }
+    }
+
     /// Detach a node from its parent and siblings. Children are not affected.
     ///
     /// # Panics
@@ -430,12 +438,6 @@ impl<T> Iterator for Descendants<T> {
 }
 
 
-/// An iterator of references to a given node and its descandants, in tree order.
-pub struct Traverse<T> {
-    root: NodeRef<T>,
-    next: Option<NodeEdge<T>>,
-}
-
 pub enum NodeEdge<T> {
     /// Indicates that start of a node that has children.
     /// Yielded by `Traverse::next` before the node’s descandants.
@@ -446,6 +448,12 @@ pub enum NodeEdge<T> {
     /// Yielded by `Traverse::next` after the node’s descandants.
     /// In HTML or XML, this corresponds to a closing tag like `</div>`
     End(NodeRef<T>),
+}
+
+/// An iterator of references to a given node and its descandants, in tree order.
+pub struct Traverse<T> {
+    root: NodeRef<T>,
+    next: Option<NodeEdge<T>>,
 }
 
 impl<T> Iterator for Traverse<T> {
@@ -472,6 +480,54 @@ impl<T> Iterator for Traverse<T> {
                                 Some(next_sibling) => Some(NodeEdge::Start(next_sibling)),
                                 None => match node.parent() {
                                     Some(parent) => Some(NodeEdge::End(parent)),
+
+                                    // `node.parent()` here can only be `None`
+                                    // if the tree has been modified during iteration,
+                                    // but silently stoping iteration
+                                    // seems a more sensible behavior than panicking.
+                                    None => None
+                                }
+                            }
+                        }
+                    }
+                };
+                Some(item)
+            }
+            None => None
+        }
+    }
+}
+
+/// An iterator of references to a given node and its descandants, in reverse tree order.
+pub struct ReverseTraverse<T> {
+    root: NodeRef<T>,
+    next: Option<NodeEdge<T>>,
+}
+
+impl<T> Iterator for ReverseTraverse<T> {
+    type Item = NodeEdge<T>;
+
+    /// # Panics
+    ///
+    /// Panics if the node about to be yielded is currently mutability borrowed.
+    fn next(&mut self) -> Option<NodeEdge<T>> {
+        match self.next.take() {
+            Some(item) => {
+                self.next = match item {
+                    NodeEdge::End(ref node) => {
+                        match node.last_child() {
+                            Some(last_child) => Some(NodeEdge::End(last_child)),
+                            None => Some(NodeEdge::Start(node.clone()))
+                        }
+                    }
+                    NodeEdge::Start(ref node) => {
+                        if node.same_node(&self.root) {
+                            None
+                        } else {
+                            match node.previous_sibling() {
+                                Some(previous_sibling) => Some(NodeEdge::End(previous_sibling)),
+                                None => match node.parent() {
+                                    Some(parent) => Some(NodeEdge::Start(parent)),
 
                                     // `node.parent()` here can only be `None`
                                     // if the tree has been modified during iteration,
