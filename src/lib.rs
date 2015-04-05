@@ -120,8 +120,8 @@ impl<T> NodeRef<T> {
     /// # Panics
     ///
     /// Panics if the node is currently mutability borrowed.
-    pub fn borrow(&self) -> DataRef<T> {
-        DataRef { _ref: self.0.borrow() }
+    pub fn borrow(&self) -> Ref<T> {
+        Ref { _ref: self.0.borrow() }
     }
 
     /// Return a unique/mutable reference to this node’s data
@@ -129,8 +129,8 @@ impl<T> NodeRef<T> {
     /// # Panics
     ///
     /// Panics if the node is currently borrowed.
-    pub fn borrow_mut(&self) -> DataRefMut<T> {
-        DataRefMut { _ref: self.0.borrow_mut() }
+    pub fn borrow_mut(&self) -> RefMut<T> {
+        RefMut { _ref: self.0.borrow_mut() }
     }
 
     /// Returns whether two references point to the same node.
@@ -350,26 +350,26 @@ impl<T> NodeRef<T> {
 }
 
 /// Wraps a `std::cell::Ref` for a node’s data.
-pub struct DataRef<'a, T: 'a> {
+pub struct Ref<'a, T: 'a> {
     _ref: cell::Ref<'a, Node<T>>
 }
 
 /// Wraps a `std::cell::RefMut` for a node’s data.
-pub struct DataRefMut<'a, T: 'a> {
+pub struct RefMut<'a, T: 'a> {
     _ref: cell::RefMut<'a, Node<T>>
 }
 
-impl<'a, T> Deref for DataRef<'a, T> {
+impl<'a, T> Deref for Ref<'a, T> {
     type Target = T;
     fn deref(&self) -> &T { &self._ref.data }
 }
 
-impl<'a, T> Deref for DataRefMut<'a, T> {
+impl<'a, T> Deref for RefMut<'a, T> {
     type Target = T;
     fn deref(&self) -> &T { &self._ref.data }
 }
 
-impl<'a, T> DerefMut for DataRefMut<'a, T> {
+impl<'a, T> DerefMut for RefMut<'a, T> {
     fn deref_mut(&mut self) -> &mut T { &mut self._ref.data }
 }
 
