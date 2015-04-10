@@ -1,13 +1,16 @@
 [package]
-name = "rctree"
-version = "0.1.1"
+name = "arena-tree"
+version = "0.1.0"
 authors = ["Simon Sapin <simon.sapin@exyr.org>"]
 license = "MIT"
-description = "A tree of reference-counted nodes, with `RefCell` for mutability"
+description = "An arena-based tree, with `RefCell` for mutability"
 repository = "https://github.com/SimonSapin/rust-forest"
 readme = "README.md"
 
 [lib]
-name = "rctree"
+name = "arena_tree"
 path = "lib.rs"
 doctest = false
+
+[dependencies]
+typed-arena = "1.0"
