@@ -4,9 +4,10 @@ version = "0.1.1"
 authors = ["Simon Sapin <simon.sapin@exyr.org>"]
 license = "MIT"
 description = "A tree of reference-counted nodes, with `RefCell` for mutability"
-repository = "https://github.com/SimonSapin/rust-rctree"
+repository = "https://github.com/SimonSapin/rust-forest"
 readme = "README.md"
 
 [lib]
 name = "rctree"
+path = "lib.rs"
 doctest = false
