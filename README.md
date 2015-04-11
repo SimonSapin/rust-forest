@@ -9,7 +9,7 @@ like [*the* DOM](https://dom.spec.whatwg.org/) does,
 but don’t necessarily have the exact same API as the DOM.
 That is:
 
-* A tree is made up of nodes
+* A tree is made up of nodes.
 * Each node has zero or more *child* nodes, which are ordered.
 * Each node has a no more than one *parent*, the node that it is a *child* of.
 * A node without a *parent* is called a *root*.
@@ -36,7 +36,7 @@ struct Node<T> {
 ```
 
 More generally, a tree with parent and sibling relationships (in addition to children relationships)
-can be viewed as a special kind of graph, but still a graph that contains cycles.
+can be viewed as a graph of aspecial kind, but still a graph that contains cycles.
 And Rust’s default ownership model does not support cycles easily.
 Therefore, we need a more involved strategy to manage the lifetime of nodes.
 
@@ -92,9 +92,9 @@ Disadvantages:
 
 The lifetime of nodes is managed through an *arena allocator*.
 
-Nodes are tied, through `&T` references, to the lifetime of the arena
+Nodes are tied, through `&'a T` references, to the lifetime of the arena
 and are destroyed all at once when the arena is destroyed.
-The links between nodes are also `&T` references internally.
+The links between nodes are also `&'a T` references internally.
 
 Since nodes are *aliased* (have multiple references to them),
 `RefCell` is used for interior mutability.
@@ -103,7 +103,7 @@ Advantages:
 
 * Nodes still have methods,
   the arena can largely be ignored during tree manipulation (as long as it’s kept alive).
-* Less runtime overhead. (Allocation is fast, no reference count increment or decrement.)
+* Less runtime overhead. (Allocation is fast, no reference count to increment or decrement.)
 * Nodes are allocated in large, continuous chunks of memory. This helps memory cache performance.
 
 Disadvantages:
