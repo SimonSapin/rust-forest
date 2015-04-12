@@ -1,5 +1,4 @@
-use std::cell::{self, RefCell};
-use std::fmt;
+use std::mem;
 use std::ops::{Index, IndexMut};
 
 
@@ -82,50 +81,50 @@ impl<T> Node<T> {
 }
 
 
-impl<T> Arena<T> {
+impl NodeId {
     /// Return an iterator of references to this node and its ancestors.
     ///
     /// Call `.next().unwrap()` once on the iterator to skip the node itself.
-    pub fn ancestors(&self, node: NodeId) -> Ancestors<T> {
+    pub fn ancestors<T>(self, arena: &Arena<T>) -> Ancestors<T> {
         Ancestors {
-            arena: self,
-            node: Some(node),
+            arena: arena,
+            node: Some(self),
         }
     }
 
     /// Return an iterator of references to this node and the siblings before it.
     ///
     /// Call `.next().unwrap()` once on the iterator to skip the node itself.
-    pub fn preceding_siblings(&self, node: NodeId) -> PrecedingSiblings<T> {
+    pub fn preceding_siblings<T>(self, arena: &Arena<T>) -> PrecedingSiblings<T> {
         PrecedingSiblings {
-            arena: self,
-            node: Some(node),
+            arena: arena,
+            node: Some(self),
         }
     }
 
     /// Return an iterator of references to this node and the siblings after it.
     ///
     /// Call `.next().unwrap()` once on the iterator to skip the node itself.
-    pub fn following_siblings(&self, node: NodeId) -> FollowingSiblings<T> {
+    pub fn following_siblings<T>(self, arena: &Arena<T>) -> FollowingSiblings<T> {
         FollowingSiblings {
-            arena: self,
-            node: Some(node),
+            arena: arena,
+            node: Some(self),
         }
     }
 
     /// Return an iterator of references to this node’s children.
-    pub fn children(&self, node: NodeId) -> Children<T> {
+    pub fn children<T>(self, arena: &Arena<T>) -> Children<T> {
         Children {
-            arena: self,
-            node: self[node].first_child,
+            arena: arena,
+            node: arena[self].first_child,
         }
     }
 
     /// Return an iterator of references to this node’s children, in reverse order.
-    pub fn reverse_children(&self, node: NodeId) -> ReverseChildren<T> {
+    pub fn reverse_children<T>(self, arena: &Arena<T>) -> ReverseChildren<T> {
         ReverseChildren {
-            arena: self,
-            node: self[node].last_child,
+            arena: arena,
+            node: arena[self].last_child,
         }
     }
 
@@ -133,51 +132,51 @@ impl<T> Arena<T> {
     ///
     /// Parent nodes appear before the descendants.
     /// Call `.next().unwrap()` once on the iterator to skip the node itself.
-    pub fn descendants(&self, node: NodeId) -> Descendants<T> {
-        Descendants(self.traverse(node))
+    pub fn descendants<T>(self, arena: &Arena<T>) -> Descendants<T> {
+        Descendants(self.traverse(arena))
     }
 
     /// Return an iterator of references to this node and its descendants, in tree order.
-    pub fn traverse(&self, node: NodeId) -> Traverse<T> {
+    pub fn traverse<T>(self, arena: &Arena<T>) -> Traverse<T> {
         Traverse {
-            arena: self,
-            root: node,
-            next: Some(NodeEdge::Start(node)),
+            arena: arena,
+            root: self,
+            next: Some(NodeEdge::Start(self)),
         }
     }
 
     /// Return an iterator of references to this node and its descendants, in tree order.
-    pub fn reverse_traverse(&self, node: NodeId) -> ReverseTraverse<T> {
+    pub fn reverse_traverse<T>(self, arena: &Arena<T>) -> ReverseTraverse<T> {
         ReverseTraverse {
-            arena: self,
-            root: node,
-            next: Some(NodeEdge::End(node)),
+            arena: arena,
+            root: self,
+            next: Some(NodeEdge::End(self)),
         }
     }
 
     /// Detach a node from its parent and siblings. Children are not affected.
-    pub fn detach(&mut self, node: NodeId) {
+    pub fn detach<T>(self, arena: &mut Arena<T>) {
         let (parent, previous_sibling, next_sibling) = {
-            let node = &mut self[node];
+            let node = &mut arena[self];
             (node.parent.take(), node.previous_sibling.take(), node.next_sibling.take())
         };
 
         if let Some(next_sibling) = next_sibling {
-            self[next_sibling].previous_sibling = previous_sibling;
+            arena[next_sibling].previous_sibling = previous_sibling;
         } else if let Some(parent) = parent {
-            self[parent].last_child = previous_sibling;
+            arena[parent].last_child = previous_sibling;
         }
 
         if let Some(previous_sibling) = previous_sibling {
-            self[previous_sibling].next_sibling = next_sibling;
+            arena[previous_sibling].next_sibling = next_sibling;
         } else if let Some(parent) = parent {
-            self[parent].first_child = next_sibling;
+            arena[parent].first_child = next_sibling;
         }
     }
 
     /// Append a new child to this node, after existing children.
-    pub fn append(&mut self, node: NodeId, new_child: NodeId) {
-        self.detach(new_child);
+    pub fn append<T>(self, new_child: NodeId, arena: &mut Arena<T>) {
+        new_child.detach(arena);
 
 
 //        let mut self_borrow = self.0.borrow_mut();
@@ -196,7 +195,7 @@ impl<T> Arena<T> {
     }
 
     /// Prepend a new child to this node, before existing children.
-    pub fn prepend(&mut self, node: NodeId, new_child: NodeId) {
+    pub fn prepend<T>(self, new_child: NodeId, arena: &mut Arena<T>) {
 //        let mut self_borrow = self.0.borrow_mut();
 //        let mut new_child_borrow = new_child.0.borrow_mut();
 //        new_child_borrow.detach();
@@ -213,7 +212,7 @@ impl<T> Arena<T> {
     }
 
     /// Insert a new sibling after this node.
-    pub fn insert_after(&mut self, node: NodeId, new_sibling: NodeId) {
+    pub fn insert_after<T>(self, new_sibling: NodeId, arena: &mut Arena<T>) {
 //        let mut self_borrow = self.0.borrow_mut();
 //        let mut new_sibling_borrow = new_sibling.0.borrow_mut();
 //        new_sibling_borrow.detach();
@@ -231,7 +230,7 @@ impl<T> Arena<T> {
     }
 
     /// Insert a new sibling before this node.
-    pub fn insert_before(&mut self, node: NodeId, new_sibling: NodeId) {
+    pub fn insert_before<T>(self, new_sibling: NodeId, arena: &mut Arena<T>) {
 //        let mut self_borrow = self.0.borrow_mut();
 //        let mut new_sibling_borrow = new_sibling.0.borrow_mut();
 //        new_sibling_borrow.detach();
@@ -429,19 +428,41 @@ impl<'a, T> Iterator for ReverseTraverse<'a, T> {
 }
 
 
+trait GetPairMut<T> {
+    fn get_pair_mut(&mut self, i: usize, j: usize) -> Result<(&mut T, &mut T), ()>;
+}
+
+
+impl<T> GetPairMut<T> for Vec<T> {
+    fn get_pair_mut(&mut self, i: usize, j: usize) -> Result<(&mut T, &mut T), ()> {
+        if i != j {
+            unsafe {
+                let self2: &mut Vec<T> = mem::transmute_copy(&self);
+                Ok((&mut self[i], &mut self2[j]))
+            }
+        } else {
+            Err(())
+        }
+    }
+}
+
+
+
 #[test]
 fn it_works() {
-    struct DropTracker<'a>(&'a cell::Cell<u32>);
+    use std::cell::Cell;
+
+    struct DropTracker<'a>(&'a Cell<u32>);
     impl<'a> Drop for DropTracker<'a> {
         fn drop(&mut self) {
             self.0.set(&self.0.get() + 1);
         }
     }
 
-    let drop_counter = cell::Cell::new(0);
+    let drop_counter = Cell::new(0);
     {
         let mut new_counter = 0;
-        let mut arena = Arena::new();
+        let arena = &mut Arena::new();
         macro_rules! new {
             () => {
                 {
@@ -452,24 +473,23 @@ fn it_works() {
         };
 
         let a = new!();  // 1
-        let tmp = new!(); arena.append(a, tmp);  // 2
-        let tmp = new!(); arena.append(a, tmp);  // 3
-        let tmp = new!(); arena.prepend(a, tmp);  // 4
+        a.append(new!(), arena);  // 2
+        a.append(new!(), arena);  // 3
+        a.prepend(new!(), arena);  // 4
         let b = new!();  // 5
-        arena.append(b, a);
-        let tmp = new!(); arena.insert_before(a, tmp);  // 6
-        let tmp = new!(); arena.insert_before(a, tmp);  // 7
-        let tmp = new!(); arena.insert_after(a, tmp);  // 8
-        let tmp = new!(); arena.insert_after(a, tmp);  // 9
+        b.append(a, arena);
+        a.insert_before(new!(), arena);  // 6
+        a.insert_before(new!(), arena);  // 7
+        a.insert_after(new!(), arena);  // 8
+        a.insert_after(new!(), arena);  // 9
         let c = new!();  // 10
-        arena.append(b, c);
+        b.append(c, arena);
 
         assert_eq!(drop_counter.get(), 0);
-        let tmp = arena[c].previous_sibling().unwrap();
-        arena.detach(tmp);
+        arena[c].previous_sibling().unwrap().detach(arena);
         assert_eq!(drop_counter.get(), 0);
 
-        assert_eq!(arena.descendants(b).map(|node| arena[node].data.0).collect::<Vec<_>>(), [
+        assert_eq!(b.descendants(arena).map(|node| arena[node].data.0).collect::<Vec<_>>(), [
             5, 6, 7, 1, 4, 2, 3, 9, 10
         ]);
     }
