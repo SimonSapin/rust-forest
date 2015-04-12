@@ -111,3 +111,22 @@ Disadvantages:
 * There is one more object (the arena) to keep around.
 * The tree can only be accessed from the thread is was created in.
 * Memory “leaks” when nodes are removed from the tree before the arena is destroyed.
+
+
+`idtree`
+--------
+
+Similar to `arena-tree`, buth the arena is simplified to a single `Vec`
+and numerical identifiers (indices in the vector) are used instead of `&'a T` references.
+
+Advantages:
+
+* There is no `RefCell`, mutability is handled in a way much more idiomatic to Rust
+  through unique (`&mut`) access to the arena.
+* The tree can be sent or shared across threads like a `Vec`.
+  This enables e.g. parallel tree traversals.
+
+Disadvantages:
+
+* Every access requires going through the arena, which can be cumbersome.
+* There is some runtime overhead over `arena-tree` because of bound checks.
