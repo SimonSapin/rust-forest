@@ -2,7 +2,7 @@ use std::mem;
 use std::ops::{Index, IndexMut};
 
 
-/// A reference to a node holding a value of type `T`. Nodes form a tree.
+/// A node identifier within a particular `Arena`.
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub struct NodeId {
     index: usize,  // FIXME: use NonZero to optimize the size of Option<NodeId>
@@ -10,11 +10,14 @@ pub struct NodeId {
 
 #[derive(Clone)]
 pub struct Node<T> {
+    // Keep these private (with read-only accessors) so that we can keep them consistent.
+    // E.g. the parent of a node’s child is that node.
     parent: Option<NodeId>,
     previous_sibling: Option<NodeId>,
     next_sibling: Option<NodeId>,
     first_child: Option<NodeId>,
     last_child: Option<NodeId>,
+
     pub data: T,
 }
 
@@ -44,6 +47,23 @@ impl<T> Arena<T> {
         });
         NodeId {
             index: next_index,
+        }
+    }
+
+    /// Get mutable references to two distinct nodes
+    ///
+    /// Panic
+    /// -----
+    ///
+    /// Panics if the two given IDs are the same.
+    fn get_pair_mut(&mut self, a: NodeId, b: NodeId) -> Result<(&mut Node<T>, &mut Node<T>), ()> {
+        if a != b {
+            unsafe {
+                let self2 = mem::transmute_copy::<&mut Arena<T>, &mut Arena<T>>(&self);
+                Ok((&mut self[a], &mut self2[b]))
+            }
+        } else {
+            Err(())
         }
     }
 }
@@ -177,74 +197,95 @@ impl NodeId {
     /// Append a new child to this node, after existing children.
     pub fn append<T>(self, new_child: NodeId, arena: &mut Arena<T>) {
         new_child.detach(arena);
-
-
-//        let mut self_borrow = self.0.borrow_mut();
-//        let mut new_child_borrow = new_child.0.borrow_mut();
-//        new_child_borrow.detach();
-//        new_child_borrow.parent = Some(&self.0);
-//        if let Some(last_child) = self_borrow.last_child.take() {
-//            new_child_borrow.previous_sibling = Some(last_child);
-//            debug_assert!(last_child.borrow().next_sibling.is_none());
-//            last_child.borrow_mut().next_sibling = Some(new_child.0);
-//        } else {
-//            debug_assert!(&self_borrow.first_child.is_none());
-//            self_borrow.first_child = Some(new_child.0);
-//        }
-//        self_borrow.last_child = Some(new_child.0);
+        let last_child_opt;
+        {
+            let (self_borrow, new_child_borrow) = arena.get_pair_mut(self, new_child)
+                .ok().expect("Can not append a node to itself");
+            new_child_borrow.parent = Some(self);
+            last_child_opt = mem::replace(&mut self_borrow.last_child, Some(new_child));
+            if let Some(last_child) = last_child_opt {
+                new_child_borrow.previous_sibling = Some(last_child);
+            } else {
+                debug_assert!(self_borrow.first_child.is_none());
+                self_borrow.first_child = Some(new_child);
+            }
+        }
+        if let Some(last_child) = last_child_opt {
+            debug_assert!(arena[last_child].next_sibling.is_none());
+            arena[last_child].next_sibling = Some(new_child);
+        }
     }
 
     /// Prepend a new child to this node, before existing children.
     pub fn prepend<T>(self, new_child: NodeId, arena: &mut Arena<T>) {
-//        let mut self_borrow = self.0.borrow_mut();
-//        let mut new_child_borrow = new_child.0.borrow_mut();
-//        new_child_borrow.detach();
-//        new_child_borrow.parent = Some(&self.0);
-//        if let Some(first_child) = self_borrow.first_child.take() {
-//            debug_assert!(first_child.borrow().previous_sibling.is_none());
-//            first_child.borrow_mut().previous_sibling = Some(new_child.0);
-//            new_child_borrow.next_sibling = Some(first_child);
-//        } else {
-//            debug_assert!(&self_borrow.first_child.is_none());
-//            self_borrow.last_child = Some(new_child.0);
-//        }
-//        self_borrow.first_child = Some(new_child.0);
+        new_child.detach(arena);
+        let first_child_opt;
+        {
+            let (self_borrow, new_child_borrow) = arena.get_pair_mut(self, new_child)
+                .ok().expect("Can not prepend a node to itself");
+            new_child_borrow.parent = Some(self);
+            first_child_opt = mem::replace(&mut self_borrow.first_child, Some(new_child));
+            if let Some(first_child) = first_child_opt {
+                new_child_borrow.next_sibling = Some(first_child);
+            } else {
+                debug_assert!(&self_borrow.first_child.is_none());
+                self_borrow.last_child = Some(new_child);
+            }
+        }
+        if let Some(first_child) = first_child_opt {
+            debug_assert!(arena[first_child].previous_sibling.is_none());
+            arena[first_child].previous_sibling = Some(new_child);
+        }
     }
 
     /// Insert a new sibling after this node.
     pub fn insert_after<T>(self, new_sibling: NodeId, arena: &mut Arena<T>) {
-//        let mut self_borrow = self.0.borrow_mut();
-//        let mut new_sibling_borrow = new_sibling.0.borrow_mut();
-//        new_sibling_borrow.detach();
-//        new_sibling_borrow.parent = self_borrow.parent;
-//        new_sibling_borrow.previous_sibling = Some(&self.0);
-//        if let Some(next_sibling) = self_borrow.next_sibling.take() {
-//            debug_assert!(same_ref(next_sibling.borrow().previous_sibling.unwrap(), self.0));
-//            next_sibling.borrow_mut().previous_sibling = Some(new_sibling.0);
-//            new_sibling_borrow.next_sibling = Some(next_sibling);
-//        } else if let Some(parent) = self_borrow.parent {
-//            debug_assert!(same_ref(parent.borrow().last_child.unwrap(), self.0));
-//            parent.borrow_mut().last_child = Some(new_sibling.0);
-//        }
-//        self_borrow.next_sibling = Some(new_sibling.0);
+        new_sibling.detach(arena);
+        let next_sibling_opt;
+        let parent_opt;
+        {
+            let (self_borrow, new_sibling_borrow) = arena.get_pair_mut(self, new_sibling)
+                .ok().expect("Can not insert a node after itself");
+            parent_opt = self_borrow.parent;
+            new_sibling_borrow.parent = parent_opt;
+            new_sibling_borrow.previous_sibling = Some(self);
+            next_sibling_opt = mem::replace(&mut self_borrow.next_sibling, Some(new_sibling));
+            if let Some(next_sibling) = next_sibling_opt {
+                new_sibling_borrow.next_sibling = Some(next_sibling);
+            }
+        }
+        if let Some(next_sibling) = next_sibling_opt {
+            debug_assert!(arena[next_sibling].previous_sibling.unwrap() == self);
+            arena[next_sibling].previous_sibling = Some(new_sibling);
+        } else if let Some(parent) = parent_opt {
+            debug_assert!(arena[parent].last_child.unwrap() == self);
+            arena[parent].last_child = Some(new_sibling);
+        }
     }
 
     /// Insert a new sibling before this node.
     pub fn insert_before<T>(self, new_sibling: NodeId, arena: &mut Arena<T>) {
-//        let mut self_borrow = self.0.borrow_mut();
-//        let mut new_sibling_borrow = new_sibling.0.borrow_mut();
-//        new_sibling_borrow.detach();
-//        new_sibling_borrow.parent = self_borrow.parent;
-//        new_sibling_borrow.next_sibling = Some(&self.0);
-//        if let Some(previous_sibling) = self_borrow.previous_sibling.take() {
-//            new_sibling_borrow.previous_sibling = Some(previous_sibling);
-//            debug_assert!(same_ref(previous_sibling.borrow().next_sibling.unwrap(), self.0));
-//            previous_sibling.borrow_mut().next_sibling = Some(new_sibling.0);
-//        } else if let Some(parent) = self_borrow.parent {
-//            debug_assert!(same_ref(parent.borrow().first_child.unwrap(), self.0));
-//            parent.borrow_mut().first_child = Some(new_sibling.0);
-//        }
-//        self_borrow.previous_sibling = Some(new_sibling.0);
+        new_sibling.detach(arena);
+        let previous_sibling_opt;
+        let parent_opt;
+        {
+            let (self_borrow, new_sibling_borrow) = arena.get_pair_mut(self, new_sibling)
+                .ok().expect("Can not insert a node after itself");
+            parent_opt = self_borrow.parent;
+            new_sibling_borrow.parent = parent_opt;
+            new_sibling_borrow.next_sibling = Some(self);
+            previous_sibling_opt = mem::replace(&mut self_borrow.previous_sibling, Some(new_sibling));
+            if let Some(previous_sibling) = previous_sibling_opt {
+                new_sibling_borrow.previous_sibling = Some(previous_sibling);
+            }
+        }
+        if let Some(previous_sibling) = previous_sibling_opt {
+            debug_assert!(arena[previous_sibling].next_sibling.unwrap() == self);
+            arena[previous_sibling].next_sibling = Some(new_sibling);
+        } else if let Some(parent) = parent_opt {
+            debug_assert!(arena[parent].first_child.unwrap() == self);
+            arena[parent].first_child = Some(new_sibling);
+        }
     }
 }
 
@@ -426,26 +467,6 @@ impl<'a, T> Iterator for ReverseTraverse<'a, T> {
         }
     }
 }
-
-
-trait GetPairMut<T> {
-    fn get_pair_mut(&mut self, i: usize, j: usize) -> Result<(&mut T, &mut T), ()>;
-}
-
-
-impl<T> GetPairMut<T> for Vec<T> {
-    fn get_pair_mut(&mut self, i: usize, j: usize) -> Result<(&mut T, &mut T), ()> {
-        if i != j {
-            unsafe {
-                let self2: &mut Vec<T> = mem::transmute_copy(&self);
-                Ok((&mut self[i], &mut self2[j]))
-            }
-        } else {
-            Err(())
-        }
-    }
-}
-
 
 
 #[test]
