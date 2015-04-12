@@ -49,21 +49,29 @@ impl<T> Arena<T> {
             index: next_index,
         }
     }
+}
 
+
+trait GetPairMut<T> {
     /// Get mutable references to two distinct nodes
     ///
     /// Panic
     /// -----
     ///
     /// Panics if the two given IDs are the same.
-    fn get_pair_mut(&mut self, a: NodeId, b: NodeId) -> Result<(&mut Node<T>, &mut Node<T>), ()> {
-        if a != b {
-            unsafe {
-                let self2 = mem::transmute_copy::<&mut Arena<T>, &mut Arena<T>>(&self);
-                Ok((&mut self[a], &mut self2[b]))
-            }
-        } else {
-            Err(())
+    fn get_pair_mut(&mut self, a: usize, b: usize, same_index_error_message: &'static str)
+                    -> (&mut T, &mut T);
+}
+
+impl<T> GetPairMut<T> for Vec<T> {
+    fn get_pair_mut(&mut self, a: usize, b: usize, same_index_error_message: &'static str)
+                    -> (&mut T, &mut T) {
+        if a == b {
+            panic!(same_index_error_message)
+        }
+        unsafe {
+            let self2 = mem::transmute_copy::<&mut Vec<T>, &mut Vec<T>>(&self);
+            (&mut self[a], &mut self2[b])
         }
     }
 }
@@ -199,8 +207,8 @@ impl NodeId {
         new_child.detach(arena);
         let last_child_opt;
         {
-            let (self_borrow, new_child_borrow) = arena.get_pair_mut(self, new_child)
-                .ok().expect("Can not append a node to itself");
+            let (self_borrow, new_child_borrow) = arena.nodes.get_pair_mut(
+                self.index, new_child.index, "Can not append a node to itself");
             new_child_borrow.parent = Some(self);
             last_child_opt = mem::replace(&mut self_borrow.last_child, Some(new_child));
             if let Some(last_child) = last_child_opt {
@@ -221,8 +229,8 @@ impl NodeId {
         new_child.detach(arena);
         let first_child_opt;
         {
-            let (self_borrow, new_child_borrow) = arena.get_pair_mut(self, new_child)
-                .ok().expect("Can not prepend a node to itself");
+            let (self_borrow, new_child_borrow) = arena.nodes.get_pair_mut(
+                self.index, new_child.index, "Can not prepend a node to itself");
             new_child_borrow.parent = Some(self);
             first_child_opt = mem::replace(&mut self_borrow.first_child, Some(new_child));
             if let Some(first_child) = first_child_opt {
@@ -244,8 +252,8 @@ impl NodeId {
         let next_sibling_opt;
         let parent_opt;
         {
-            let (self_borrow, new_sibling_borrow) = arena.get_pair_mut(self, new_sibling)
-                .ok().expect("Can not insert a node after itself");
+            let (self_borrow, new_sibling_borrow) = arena.nodes.get_pair_mut(
+                self.index, new_sibling.index, "Can not insert a node after itself");
             parent_opt = self_borrow.parent;
             new_sibling_borrow.parent = parent_opt;
             new_sibling_borrow.previous_sibling = Some(self);
@@ -269,8 +277,8 @@ impl NodeId {
         let previous_sibling_opt;
         let parent_opt;
         {
-            let (self_borrow, new_sibling_borrow) = arena.get_pair_mut(self, new_sibling)
-                .ok().expect("Can not insert a node after itself");
+            let (self_borrow, new_sibling_borrow) = arena.nodes.get_pair_mut(
+                self.index, new_sibling.index, "Can not insert a node before itself");
             parent_opt = self_borrow.parent;
             new_sibling_borrow.parent = parent_opt;
             new_sibling_borrow.next_sibling = Some(self);
