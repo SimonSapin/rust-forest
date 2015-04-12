@@ -1,4 +1,4 @@
-CRATES = rctree arena-tree
+CRATES = rctree arena-tree idtree
 
 .PHONY: default
 default: test

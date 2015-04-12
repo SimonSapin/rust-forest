@@ -10,7 +10,7 @@ use std::ops::{Deref, DerefMut};
 /// Internally, this uses reference counting for lifetime tracking
 /// and `std::cell::RefCell` for interior mutability.
 ///
-/// **Note:** Cloning a `NodeRef` only increments a reference count. It does not copy the data.
+/// **Note:** Cloning a `NodeRef` only copies a pointer. It does not copy the data.
 pub struct NodeRef<'a, T: 'a>(&'a RefCell<Node<'a, T>>);
 
 struct Node<'a, T: 'a> {

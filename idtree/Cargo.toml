@@ -1,0 +1,13 @@
+[package]
+name = "idtree"
+version = "0.1.0"
+authors = ["Simon Sapin <simon.sapin@exyr.org>"]
+license = "MIT"
+description = "A tree based on a `Vec` and indices/IDs to represent nodes."
+repository = "https://github.com/SimonSapin/rust-forest"
+readme = "README.md"
+
+[lib]
+name = "idtree"
+path = "lib.rs"
+doctest = false
