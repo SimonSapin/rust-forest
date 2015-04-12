@@ -517,3 +517,23 @@ fn it_works() {
 
     assert_eq!(drop_counter.get(), 10);
 }
+
+
+#[test]
+fn threaded() {
+    use std::thread;
+
+    let arena = &mut Arena::new();
+    let root = arena.new_node("".to_string());;
+    root.append(arena.new_node("b".to_string()), arena);
+    root.prepend(arena.new_node("a".to_string()), arena);
+    root.append(arena.new_node("c".to_string()), arena);
+
+    macro_rules! collect_data {
+        ($iter: expr) => { $iter.map(|node| &*arena[node].data).collect::<Vec<&str>>() }
+    }
+    let thread_1 = thread::scoped(|| collect_data!(root.children(arena)));
+    let thread_2 = thread::scoped(|| collect_data!(root.reverse_children(arena)));
+    assert_eq!(thread_1.join(), ["a", "b", "c"]);
+    assert_eq!(thread_2.join(), ["c", "b", "a"]);
+}
