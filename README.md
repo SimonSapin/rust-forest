@@ -111,6 +111,13 @@ Disadvantages:
 * There is one more object (the arena) to keep around.
 * The tree can only be accessed from the thread is was created in.
 * Memory “leaks” when nodes are removed from the tree before the arena is destroyed.
+  This can be alleviated by maintaining a *free list*
+  of nodes that are not used anymore and can be reused,
+  but only if these nodes have been freed explicitly.
+  (Whereas reference counting and garbage collection would free unused nodes automatically.)
+  But then nothing prevents references to freed nodes to be kept around.
+  Another explicit mechanism (like tracking a *generation number* in each node)
+  can be added to prevent (mostly) such references and accessing a freed or re-allocated node.
 
 
 `idtree`
@@ -130,3 +137,5 @@ Disadvantages:
 
 * Every access requires going through the arena, which can be cumbersome.
 * There is some runtime overhead over `arena-tree` because of bound checks.
+* A node ID from a given arena can be used in a different arena,
+  which is likely to not cause an error and access an unrelated node.
