@@ -1,3 +1,5 @@
+#![cfg_attr(test_threads, feature(scoped))]
+
 use std::mem;
 use std::ops::{Index, IndexMut};
 
@@ -527,6 +529,7 @@ fn it_works() {
 }
 
 
+#[cfg(test_threads)]
 #[test]
 fn threaded() {
     use std::thread;
