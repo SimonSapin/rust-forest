@@ -2,7 +2,7 @@ sudo: false
 language: rust
 rust:
   - nightly
-  - 1.0.0-beta
+  - beta
 script:
   - "[ $TRAVIS_RUST_VERSION != nightly ] || (cd rctree && cargo test)"
   - "(cd arena-tree && cargo test)"
