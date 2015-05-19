@@ -3,6 +3,7 @@ language: rust
 rust:
   - nightly
   - beta
+  - stable
 script:
   - "[ $TRAVIS_RUST_VERSION != nightly ] || (cd rctree && cargo test)"
   - "(cd arena-tree && cargo test)"
