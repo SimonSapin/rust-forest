@@ -9,7 +9,6 @@ repository = "https://github.com/SimonSapin/rust-forest"
 [lib]
 name = "arena_tree"
 path = "lib.rs"
-doctest = false
 
 [dev-dependencies]
 typed-arena = "1.0"
