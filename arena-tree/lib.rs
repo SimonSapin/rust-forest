@@ -184,15 +184,18 @@ impl<'a, T> Node<'a, T> {
 }
 
 
-macro_rules! impl_node_iterator {
-    ($name: ident, $next: expr) => {
+macro_rules! axis_iterator {
+    (#[$attr:meta] $name: ident: $next: ident) => {
+        #[$attr]
+        pub struct $name<'a, T: 'a>(Option<&'a Node<'a, T>>);
+
         impl<'a, T> Iterator for $name<'a, T> {
             type Item = &'a Node<'a, T>;
 
             fn next(&mut self) -> Option<&'a Node<'a, T>> {
                 match self.0.take() {
                     Some(node) => {
-                        self.0 = $next(node);
+                        self.0 = node.$next.get();
                         Some(node)
                     }
                     None => None
@@ -202,25 +205,30 @@ macro_rules! impl_node_iterator {
     }
 }
 
-/// An iterator of references to the ancestors a given node.
-pub struct Ancestors<'a, T: 'a>(Option<&'a Node<'a, T>>);
-impl_node_iterator!(Ancestors, |node: &'a Node<'a, T>| node.parent.get());
+axis_iterator! {
+    /// An iterator of references to the ancestors a given node.
+    Ancestors: parent
+}
 
-/// An iterator of references to the siblings before a given node.
-pub struct PrecedingSiblings<'a, T: 'a>(Option<&'a Node<'a, T>>);
-impl_node_iterator!(PrecedingSiblings, |node: &'a Node<'a, T>| node.previous_sibling.get());
+axis_iterator! {
+    /// An iterator of references to the siblings before a given node.
+    PrecedingSiblings: previous_sibling
+}
 
-/// An iterator of references to the siblings after a given node.
-pub struct FollowingSiblings<'a, T: 'a>(Option<&'a Node<'a, T>>);
-impl_node_iterator!(FollowingSiblings, |node: &'a Node<'a, T>| node.next_sibling.get());
+axis_iterator! {
+    /// An iterator of references to the siblings after a given node.
+    FollowingSiblings: next_sibling
+}
 
-/// An iterator of references to the children of a given node.
-pub struct Children<'a, T: 'a>(Option<&'a Node<'a, T>>);
-impl_node_iterator!(Children, |node: &'a Node<'a, T>| node.next_sibling.get());
+axis_iterator! {
+    /// An iterator of references to the children of a given node.
+    Children: next_sibling
+}
 
-/// An iterator of references to the children of a given node, in reverse order.
-pub struct ReverseChildren<'a, T: 'a>(Option<&'a Node<'a, T>>);
-impl_node_iterator!(ReverseChildren, |node: &'a Node<'a, T>| node.previous_sibling.get());
+axis_iterator! {
+    /// An iterator of references to the children of a given node, in reverse order.
+    ReverseChildren: previous_sibling
+}
 
 
 /// An iterator of references to a given node and its descendants, in tree order.
@@ -254,95 +262,63 @@ pub enum NodeEdge<T> {
     End(T),
 }
 
+macro_rules! traverse_iterator {
+    (#[$attr:meta] $name: ident: $first_child: ident, $next_sibling: ident) => {
+        #[$attr]
+        pub struct $name<'a, T: 'a> {
+            root: &'a Node<'a, T>,
+            next: Option<NodeEdge<&'a Node<'a, T>>>,
+        }
 
-/// An iterator of references to a given node and its descendants, in tree order.
-pub struct Traverse<'a, T: 'a> {
-    root: &'a Node<'a, T>,
-    next: Option<NodeEdge<&'a Node<'a, T>>>,
-}
+        impl<'a, T> Iterator for $name<'a, T> {
+            type Item = NodeEdge<&'a Node<'a, T>>;
 
-impl<'a, T> Iterator for Traverse<'a, T> {
-    type Item = NodeEdge<&'a Node<'a, T>>;
-
-    fn next(&mut self) -> Option<NodeEdge<&'a Node<'a, T>>> {
-        match self.next.take() {
-            Some(item) => {
-                self.next = match item {
-                    NodeEdge::Start(node) => {
-                        match node.first_child.get() {
-                            Some(first_child) => Some(NodeEdge::Start(first_child)),
-                            None => Some(NodeEdge::End(node))
-                        }
-                    }
-                    NodeEdge::End(node) => {
-                        if node.same_node(self.root) {
-                            None
-                        } else {
-                            match node.next_sibling.get() {
-                                Some(next_sibling) => Some(NodeEdge::Start(next_sibling)),
-                                None => match node.parent.get() {
-                                    Some(parent) => Some(NodeEdge::End(parent)),
-
-                                    // `node.parent()` here can only be `None`
-                                    // if the tree has been modified during iteration,
-                                    // but silently stoping iteration
-                                    // seems a more sensible behavior than panicking.
-                                    None => None
+            fn next(&mut self) -> Option<NodeEdge<&'a Node<'a, T>>> {
+                match self.next.take() {
+                    Some(item) => {
+                        self.next = match item {
+                            NodeEdge::Start(node) => {
+                                match node.$first_child.get() {
+                                    Some(child) => Some(NodeEdge::Start(child)),
+                                    None => Some(NodeEdge::End(node))
                                 }
                             }
-                        }
+                            NodeEdge::End(node) => {
+                                if node.same_node(self.root) {
+                                    None
+                                } else {
+                                    match node.$next_sibling.get() {
+                                        Some(sibling) => Some(NodeEdge::Start(sibling)),
+                                        None => match node.parent.get() {
+                                            Some(parent) => Some(NodeEdge::End(parent)),
+
+                                            // `node.parent()` here can only be `None`
+                                            // if the tree has been modified during iteration,
+                                            // but silently stoping iteration
+                                            // seems a more sensible behavior than panicking.
+                                            None => None
+                                        }
+                                    }
+                                }
+                            }
+                        };
+                        Some(item)
                     }
-                };
-                Some(item)
+                    None => None
+                }
             }
-            None => None
         }
     }
 }
 
-/// An iterator of references to a given node and its descendants, in reverse tree order.
-pub struct ReverseTraverse<'a, T: 'a> {
-    root: &'a Node<'a, T>,
-    next: Option<NodeEdge<&'a Node<'a, T>>>,
+traverse_iterator! {
+    /// An iterator of references to a given node and its descendants, in tree order.
+    Traverse: first_child, next_sibling
 }
 
-impl<'a, T> Iterator for ReverseTraverse<'a, T> {
-    type Item = NodeEdge<&'a Node<'a, T>>;
-
-    fn next(&mut self) -> Option<NodeEdge<&'a Node<'a, T>>> {
-        match self.next.take() {
-            Some(item) => {
-                self.next = match item {
-                    NodeEdge::End(node) => {
-                        match node.last_child.get() {
-                            Some(last_child) => Some(NodeEdge::End(last_child)),
-                            None => Some(NodeEdge::Start(node))
-                        }
-                    }
-                    NodeEdge::Start(node) => {
-                        if node.same_node(self.root) {
-                            None
-                        } else {
-                            match node.previous_sibling.get() {
-                                Some(previous_sibling) => Some(NodeEdge::End(previous_sibling)),
-                                None => match node.parent.get() {
-                                    Some(parent) => Some(NodeEdge::Start(parent)),
-
-                                    // `node.parent()` here can only be `None`
-                                    // if the tree has been modified during iteration,
-                                    // but silently stoping iteration
-                                    // seems a more sensible behavior than panicking.
-                                    None => None
-                                }
-                            }
-                        }
-                    }
-                };
-                Some(item)
-            }
-            None => None
-        }
-    }
+traverse_iterator! {
+    /// An iterator of references to a given node and its descendants, in reverse tree order.
+    ReverseTraverse: last_child, previous_sibling
 }
 
 
