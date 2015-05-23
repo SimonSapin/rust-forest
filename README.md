@@ -97,7 +97,7 @@ and are destroyed all at once when the arena is destroyed.
 The links between nodes are also `&'a T` references internally.
 
 Since nodes are *aliased* (have multiple references to them),
-`RefCell` is used for interior mutability.
+`Cell` is used for interior mutability.
 
 Advantages:
 
