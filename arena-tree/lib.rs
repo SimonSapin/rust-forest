@@ -1,7 +1,21 @@
+/*! 
+A DOM-like tree data structure based on `&Node` references.
+
+Any non-trivial tree involves reference cycles
+(e.g. if a node has a first child, the parent of the child is that node).
+To enable this, nodes need to live in an arena allocator
+such as `arena::TypedArena` distrubuted with rustc (which is `#[unstable]` as of this writing)
+or [`typed_arena::Arena`](https://crates.io/crates/typed-arena).
+
+If you need mutability in the node’s `data`,
+make it a cell (`Cell` or `RefCell`) or use cells inside of it.
+
+*/
+
 use std::cell::Cell;
 
 
-/// Use `T=RefCell<_>` if you need to mutate node’s data.
+/// A node inside a DOM-like tree.
 pub struct Node<'a, T: 'a> {
     pub parent: Cell<Option<&'a Node<'a, T>>>,
     pub previous_sibling: Cell<Option<&'a Node<'a, T>>>,
@@ -30,6 +44,9 @@ impl<T: Copy> Take<T> for Cell<Option<T>> {
 
 impl<'a, T> Node<'a, T> {
     /// Create a new node from its associated data.
+    ///
+    /// Typically, this node needs to be moved into an arena allocator
+    /// before it can be used in a tree.
     pub fn new(data: T) -> Node<'a, T> {
         Node {
             parent: Cell::new(None),
@@ -206,27 +223,27 @@ macro_rules! axis_iterator {
 }
 
 axis_iterator! {
-    /// An iterator of references to the ancestors a given node.
+    #[doc = "An iterator of references to the ancestors a given node."]
     Ancestors: parent
 }
 
 axis_iterator! {
-    /// An iterator of references to the siblings before a given node.
+    #[doc = "An iterator of references to the siblings before a given node."]
     PrecedingSiblings: previous_sibling
 }
 
 axis_iterator! {
-    /// An iterator of references to the siblings after a given node.
+    #[doc = "An iterator of references to the siblings after a given node."]
     FollowingSiblings: next_sibling
 }
 
 axis_iterator! {
-    /// An iterator of references to the children of a given node.
+    #[doc = "An iterator of references to the children of a given node."]
     Children: next_sibling
 }
 
 axis_iterator! {
-    /// An iterator of references to the children of a given node, in reverse order.
+    #[doc = "An iterator of references to the children of a given node, in reverse order."]
     ReverseChildren: previous_sibling
 }
 
@@ -312,12 +329,12 @@ macro_rules! traverse_iterator {
 }
 
 traverse_iterator! {
-    /// An iterator of references to a given node and its descendants, in tree order.
+    #[doc = "An iterator of the start and end edges of a given node and its descendants, in tree order."]
     Traverse: first_child, next_sibling
 }
 
 traverse_iterator! {
-    /// An iterator of references to a given node and its descendants, in reverse tree order.
+    #[doc = "An iterator of the start and end edges of a given node and its descendants, in reverse tree order."]
     ReverseTraverse: last_child, previous_sibling
 }
 
