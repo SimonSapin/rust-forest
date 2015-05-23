@@ -1,5 +1,3 @@
-extern crate typed_arena;
-
 use std::cell::Cell;
 
 
@@ -13,30 +11,6 @@ pub struct Node<'a, T: 'a> {
     pub data: T,
 }
 
-
-/// An arena allocators for tree nodes.
-///
-/// Nodes are only freed when the arena is.
-/// Multiple trees can be in the same arena.
-pub struct Arena<'a, T: 'a>(typed_arena::Arena<Node<'a, T>>);
-
-impl<'a, T> Arena<'a, T> {
-    pub fn new() -> Arena<'a, T> {
-        Arena(typed_arena::Arena::new())
-    }
-
-    /// Create a new node from its associated data.
-    pub fn new_node(&'a self, data: T) -> &'a Node<'a, T> {
-        self.0.alloc(Node {
-            parent: Cell::new(None),
-            first_child: Cell::new(None),
-            last_child: Cell::new(None),
-            previous_sibling: Cell::new(None),
-            next_sibling: Cell::new(None),
-            data: data,
-        })
-    }
-}
 
 fn same_ref<T>(a: &T, b: &T) -> bool {
     a as *const T == b as *const T
@@ -55,6 +29,18 @@ impl<T: Copy> Take<T> for Cell<Option<T>> {
 }
 
 impl<'a, T> Node<'a, T> {
+    /// Create a new node from its associated data.
+    pub fn new(data: T) -> Node<'a, T> {
+        Node {
+            parent: Cell::new(None),
+            first_child: Cell::new(None),
+            last_child: Cell::new(None),
+            previous_sibling: Cell::new(None),
+            next_sibling: Cell::new(None),
+            data: data,
+        }
+    }
+
     /// Returns whether two references point to the same node.
     pub fn same_node(&self, other: &Node<'a, T>) -> bool {
         same_ref(self, other)
@@ -360,6 +346,9 @@ impl<'a, T> Iterator for ReverseTraverse<'a, T> {
 }
 
 
+#[cfg(test)]
+extern crate typed_arena;
+
 #[test]
 fn it_works() {
     struct DropTracker<'a>(&'a Cell<u32>);
@@ -372,10 +361,10 @@ fn it_works() {
     let drop_counter = Cell::new(0);
     {
         let mut new_counter = 0;
-        let arena = Arena::new();
+        let arena = typed_arena::Arena::new();
         let mut new = || {
             new_counter += 1;
-            arena.new_node((new_counter, DropTracker(&drop_counter)))
+            arena.alloc(Node::new((new_counter, DropTracker(&drop_counter))))
         };
 
         let a = new();  // 1

@@ -11,5 +11,5 @@ name = "arena_tree"
 path = "lib.rs"
 doctest = false
 
-[dependencies]
+[dev-dependencies]
 typed-arena = "1.0"
