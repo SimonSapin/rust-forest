@@ -7,8 +7,7 @@ use std::ops::{Deref, DerefMut};
 
 /// A reference to a node holding a value of type `T`. Nodes form a tree.
 ///
-/// Internally, this uses reference counting for lifetime tracking
-/// and `std::cell::RefCell` for interior mutability.
+/// Internally, this uses `std::cell::RefCell` for interior mutability.
 ///
 /// **Note:** Cloning a `NodeRef` only copies a pointer. It does not copy the data.
 pub struct NodeRef<'a, T: 'a>(&'a RefCell<Node<'a, T>>);

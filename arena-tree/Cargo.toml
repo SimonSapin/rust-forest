@@ -5,7 +5,6 @@ authors = ["Simon Sapin <simon.sapin@exyr.org>"]
 license = "MIT"
 description = "An arena-based tree, with `RefCell` for mutability"
 repository = "https://github.com/SimonSapin/rust-forest"
-readme = "README.md"
 
 [lib]
 name = "arena_tree"
