@@ -34,11 +34,11 @@ use std::cell::Cell;
 
 /// A node inside a DOM-like tree.
 pub struct Node<'a, T: 'a> {
-    pub parent: Cell<Option<&'a Node<'a, T>>>,
-    pub previous_sibling: Cell<Option<&'a Node<'a, T>>>,
-    pub next_sibling: Cell<Option<&'a Node<'a, T>>>,
-    pub first_child: Cell<Option<&'a Node<'a, T>>>,
-    pub last_child: Cell<Option<&'a Node<'a, T>>>,
+    parent: Cell<Option<&'a Node<'a, T>>>,
+    previous_sibling: Cell<Option<&'a Node<'a, T>>>,
+    next_sibling: Cell<Option<&'a Node<'a, T>>>,
+    first_child: Cell<Option<&'a Node<'a, T>>>,
+    last_child: Cell<Option<&'a Node<'a, T>>>,
     pub data: T,
 }
 
@@ -73,6 +73,31 @@ impl<'a, T> Node<'a, T> {
             next_sibling: Cell::new(None),
             data: data,
         }
+    }
+
+    /// Return a reference to the parent node, unless this node is the root of the tree.
+    pub fn parent(&self) -> Option<&'a Node<'a, T>> {
+        self.parent.get()
+    }
+
+    /// Return a reference to the first child of this node, unless it has no child.
+    pub fn first_child(&self) -> Option<&'a Node<'a, T>> {
+        self.first_child.get()
+    }
+
+    /// Return a reference to the last child of this node, unless it has no child.
+    pub fn last_child(&self) -> Option<&'a Node<'a, T>> {
+        self.last_child.get()
+    }
+
+    /// Return a reference to the previous sibling of this node, unless it is a first child.
+    pub fn previous_sibling(&self) -> Option<&'a Node<'a, T>> {
+        self.previous_sibling.get()
+    }
+
+    /// Return a reference to the previous sibling of this node, unless it is a last child.
+    pub fn next_sibling(&self) -> Option<&'a Node<'a, T>> {
+        self.next_sibling.get()
     }
 
     /// Returns whether two references point to the same node.

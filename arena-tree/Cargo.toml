@@ -1,6 +1,6 @@
 [package]
 name = "arena-tree"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Simon Sapin <simon.sapin@exyr.org>"]
 license = "MIT"
 description = "An arena-based tree, with `RefCell` for mutability"
