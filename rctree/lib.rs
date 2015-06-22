@@ -1,4 +1,4 @@
-#![feature(alloc)]
+#![feature(rc_weak)]
 
 use std::cell::{self, RefCell};
 use std::fmt;
