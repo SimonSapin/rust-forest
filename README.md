@@ -36,7 +36,7 @@ struct Node<T> {
 ```
 
 More generally, a tree with parent and sibling relationships (in addition to children relationships)
-can be viewed as a graph of aspecial kind, but still a graph that contains cycles.
+can be viewed as a graph of a special kind, but still a graph that contains cycles.
 And Rust’s default ownership model does not support cycles easily.
 Therefore, we need a more involved strategy to manage the lifetime of nodes.
 
@@ -123,7 +123,7 @@ Disadvantages:
 `idtree`
 --------
 
-Similar to `arena-tree`, buth the arena is simplified to a single `Vec`
+Similar to `arena-tree`, but the arena is simplified to a single `Vec`
 and numerical identifiers (indices in the vector) are used instead of `&'a T` references.
 
 Advantages:
