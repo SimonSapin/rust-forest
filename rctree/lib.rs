@@ -221,14 +221,14 @@ impl<T> NodeRef<T> {
         {
             let mut new_child_borrow = new_child.0.borrow_mut();
             new_child_borrow.detach();
-            new_child_borrow.parent = Some(self.0.downgrade());
+            new_child_borrow.parent = Some(Rc::downgrade(&self.0));
             if let Some(last_child_weak) = self_borrow.last_child.take() {
                 if let Some(last_child_strong) = last_child_weak.upgrade() {
                     new_child_borrow.previous_sibling = Some(last_child_weak);
                     last_child_opt = Some(last_child_strong);
                 }
             }
-            self_borrow.last_child = Some(new_child.0.downgrade());
+            self_borrow.last_child = Some(Rc::downgrade(&new_child.0));
         }
 
         if let Some(last_child_strong) = last_child_opt {
@@ -252,19 +252,19 @@ impl<T> NodeRef<T> {
         {
             let mut new_child_borrow = new_child.0.borrow_mut();
             new_child_borrow.detach();
-            new_child_borrow.parent = Some(self.0.downgrade());
+            new_child_borrow.parent = Some(Rc::downgrade(&self.0));
             match self_borrow.first_child.take() {
                 Some(first_child_strong) => {
                     {
                         let mut first_child_borrow = first_child_strong.borrow_mut();
                         debug_assert!(first_child_borrow.previous_sibling.is_none());
-                        first_child_borrow.previous_sibling = Some(new_child.0.downgrade());
+                        first_child_borrow.previous_sibling = Some(Rc::downgrade(&new_child.0));
                     }
                     new_child_borrow.next_sibling = Some(first_child_strong);
                 }
                 None => {
                     debug_assert!(self_borrow.first_child.is_none());
-                    self_borrow.last_child = Some(new_child.0.downgrade());
+                    self_borrow.last_child = Some(Rc::downgrade(&new_child.0));
                 }
             }
         }
@@ -282,7 +282,7 @@ impl<T> NodeRef<T> {
             let mut new_sibling_borrow = new_sibling.0.borrow_mut();
             new_sibling_borrow.detach();
             new_sibling_borrow.parent = self_borrow.parent.clone();
-            new_sibling_borrow.previous_sibling = Some(self.0.downgrade());
+            new_sibling_borrow.previous_sibling = Some(Rc::downgrade(&self.0));
             match self_borrow.next_sibling.take() {
                 Some(next_sibling_strong) => {
                     {
@@ -291,7 +291,7 @@ impl<T> NodeRef<T> {
                             let weak = next_sibling_borrow.previous_sibling.as_ref().unwrap();
                             same_rc(&weak.upgrade().unwrap(), &self.0)
                         });
-                        next_sibling_borrow.previous_sibling = Some(new_sibling.0.downgrade());
+                        next_sibling_borrow.previous_sibling = Some(Rc::downgrade(&new_sibling.0));
                     }
                     new_sibling_borrow.next_sibling = Some(next_sibling_strong);
                 }
@@ -299,7 +299,7 @@ impl<T> NodeRef<T> {
                     if let Some(parent_ref) = self_borrow.parent.as_ref() {
                         if let Some(parent_strong) = parent_ref.upgrade() {
                             let mut parent_borrow = parent_strong.borrow_mut();
-                            parent_borrow.last_child = Some(new_sibling.0.downgrade());
+                            parent_borrow.last_child = Some(Rc::downgrade(&new_sibling.0));
                         }
                     }
                 }
@@ -327,7 +327,7 @@ impl<T> NodeRef<T> {
                     previous_sibling_opt = Some(previous_sibling_strong);
                 }
             }
-            self_borrow.previous_sibling = Some(new_sibling.0.downgrade());
+            self_borrow.previous_sibling = Some(Rc::downgrade(&new_sibling.0));
         }
 
         if let Some(previous_sibling_strong) = previous_sibling_opt {
