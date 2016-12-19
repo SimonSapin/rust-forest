@@ -107,7 +107,7 @@ impl<T> Node<T> {
     pub fn previous_sibling(&self) -> Option<NodeId> { self.previous_sibling }
 
     /// Return the ID of the previous sibling of this node, unless it is a first child.
-    pub fn next_sibling(&self) -> Option<NodeId> { self.previous_sibling }
+    pub fn next_sibling(&self) -> Option<NodeId> { self.next_sibling }
 }
 
 
