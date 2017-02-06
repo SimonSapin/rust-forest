@@ -29,6 +29,8 @@ assert_eq!(a.descendants().map(|node| node.data.borrow().clone()).collect::<Vec<
 
 */
 
+#![feature(move_cell)]
+
 use std::cell::Cell;
 
 
@@ -45,18 +47,6 @@ pub struct Node<'a, T: 'a> {
 
 fn same_ref<T>(a: &T, b: &T) -> bool {
     a as *const T == b as *const T
-}
-
-trait Take<T> {
-    fn take(&self) -> Option<T>;
-}
-
-impl<T: Copy> Take<T> for Cell<Option<T>> {
-    fn take(&self) -> Option<T> {
-        let value = self.get();
-        self.set(None);
-        value
-    }
 }
 
 impl<'a, T> Node<'a, T> {
