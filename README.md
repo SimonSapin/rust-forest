@@ -1,3 +1,16 @@
+No Maintenance Intended
+=======================
+
+[![No Maintenance Intended](http://unmaintained.tech/badge.svg)](http://unmaintained.tech/)
+
+This repository exists to publish the results of some experiments
+that I did over a couple week-ends that one time.
+This is not a software project that is being maintained over time.
+
+If you would like to use this code, consider copying into your own source repository
+under the terms of the MIT license.
+
+
 rust-forest
 ===========
 
